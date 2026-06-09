@@ -235,6 +235,8 @@ body {
   color: var(--text-muted);
   border: 1px solid var(--panel-border);
   pointer-events: none;
+  z-index: 10;
+  transition: opacity 0.5s ease;
 }
 
 /* Console/Terminal Window */

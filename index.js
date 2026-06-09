@@ -121,6 +121,30 @@ testshape();
   const statusDot = document.getElementById('status-dot');
   const statusText = document.getElementById('status-text');
 
+  const styleSelect = document.getElementById('material-select');
+  const gridToggle = document.getElementById('helper-grid-toggle');
+  const autoRenderToggle = document.getElementById('auto-render-toggle');
+
+  // Load saved UI settings from localStorage
+  const savedStyle = localStorage.getItem('openscad_setting_style');
+  if (savedStyle !== null) {
+    styleSelect.value = savedStyle;
+  }
+  
+  const savedGrid = localStorage.getItem('openscad_setting_grid');
+  if (savedGrid !== null) {
+    gridToggle.checked = (savedGrid === 'true');
+  } else {
+    gridToggle.checked = false; // default is off
+  }
+
+  const savedAutoRender = localStorage.getItem('openscad_setting_autorender');
+  if (savedAutoRender !== null) {
+    autoRenderToggle.checked = (savedAutoRender === 'true');
+  } else {
+    autoRenderToggle.checked = true; // default is on
+  }
+
   let lastRenderedSTL = null; // Buffer to hold rendered STL data
 
   function appendLog(text, type = '') {
@@ -137,6 +161,7 @@ testshape();
   });
 
   let isSwitchingFile = false;
+  let lastLoadedFile = null;
 
   function saveCurrentFile() {
     const activeFile = localStorage.getItem("openscad_active_file") || "testShape";
@@ -327,11 +352,13 @@ testshape();
     // Grid Helper
     gridHelper = new THREE.GridHelper(100, 30, 0x00f0ff, 0x222633);
     gridHelper.position.y = -0.01;
+    gridHelper.visible = gridToggle.checked;
     scene.add(gridHelper);
 
     // Axes Helper
     axesHelper = new THREE.AxesHelper(15);
     axesHelper.position.y = 0.01; // Slightly offset to avoid z-fighting
+    axesHelper.visible = gridToggle.checked;
     scene.add(axesHelper);
 
     // Initialize Orientation Gizmo
@@ -474,7 +501,7 @@ testshape();
     appendLog(`Viewport material updated to: ${style}`, 'info');
   }
 
-  function loadSTLIntoViewport(arrayBuffer) {
+  function loadSTLIntoViewport(arrayBuffer, shouldResetCamera = true) {
     if (currentMesh) {
       scene.remove(currentMesh);
     }
@@ -505,40 +532,152 @@ testshape();
     scene.add(group);
     currentMesh = group;
 
-    // Adjust camera to fit the model bounding box
-    const size = new THREE.Vector3();
-    boundingBox.getSize(size);
-    const maxDim = Math.max(size.x, size.y, size.z);
-    const fov = camera.fov * (Math.PI / 180);
-    let cameraZ = Math.abs(maxDim / 2 / Math.tan(fov / 2));
-    
-    cameraZ *= 1.7; // Factor to add spacing around the model
-    camera.position.set(cameraZ * 0.7, cameraZ * 0.7, cameraZ);
-    camera.lookAt(new THREE.Vector3(0, 0, 0));
-    controls.target.set(0, 0, 0);
-    controls.update();
+    if (shouldResetCamera) {
+      // Adjust camera to fit the model bounding box
+      const size = new THREE.Vector3();
+      boundingBox.getSize(size);
+      const maxDim = Math.max(size.x, size.y, size.z);
+      const fov = camera.fov * (Math.PI / 180);
+      let cameraZ = Math.abs(maxDim / 2 / Math.tan(fov / 2));
+      
+      cameraZ *= 1.7; // Factor to add spacing around the model
+      camera.position.set(cameraZ * 0.7, cameraZ * 0.7, cameraZ);
+      camera.lookAt(new THREE.Vector3(0, 0, 0));
+      controls.target.set(0, 0, 0);
+      controls.update();
+    }
   }
 
   // Initialize 3D Viewport
   initViewport();
 
+  // Hide orientation instructions on first interaction with the viewport
+  const viewportContainer = document.getElementById('viewport-container');
+  const overlayInfo = document.querySelector('.viewport-overlay-info');
+  if (viewportContainer && overlayInfo) {
+    const hideOverlay = () => {
+      overlayInfo.style.opacity = '0';
+      // Clean up event listeners so we don't keep firing them
+      viewportContainer.removeEventListener('pointerdown', hideOverlay);
+      viewportContainer.removeEventListener('wheel', hideOverlay);
+    };
+    viewportContainer.addEventListener('pointerdown', hideOverlay, { passive: true });
+    viewportContainer.addEventListener('wheel', hideOverlay, { passive: true });
+  }
+
   // Listen for material style changes
-  document.getElementById('material-select').addEventListener('change', (e) => {
+  styleSelect.addEventListener('change', (e) => {
     updateMeshMaterial(e.target.value);
+    localStorage.setItem('openscad_setting_style', e.target.value);
   });
 
   // Listen for grid visibility changes
-  document.getElementById('grid-toggle').addEventListener('change', (e) => {
+  gridToggle.addEventListener('change', (e) => {
     if (gridHelper) {
       gridHelper.visible = e.target.checked;
     }
     if (axesHelper) {
       axesHelper.visible = e.target.checked;
     }
+    localStorage.setItem('openscad_setting_grid', e.target.checked);
+  });
+
+  // Listen for auto-render setting changes
+  autoRenderToggle.addEventListener('change', (e) => {
+    localStorage.setItem('openscad_setting_autorender', e.target.checked);
   });
 
   // --- Render function and handlers ---
   let activeWorker = null;
+
+  function safeDump(obj, depth = 3) {
+    const seen = new WeakSet();
+    
+    function clean(val, currentDepth) {
+      if (val === null || val === undefined) return val;
+      if (typeof val === 'function') {
+        return `[Function: ${val.name || 'anonymous'}]`;
+      }
+      if (typeof val !== 'object') return val;
+      if (currentDepth > depth) return '[Object]';
+      if (seen.has(val)) return '[Circular]';
+      
+      seen.add(val);
+      
+      if (val instanceof Error) {
+        const copy = {
+          name: val.name,
+          message: val.message,
+          stack: val.stack
+        };
+        for (const key of Object.getOwnPropertyNames(val)) {
+          if (!(key in copy)) {
+            copy[key] = clean(val[key], currentDepth + 1);
+          }
+        }
+        return copy;
+      }
+      
+      if (Array.isArray(val)) {
+        return val.map(item => clean(item, currentDepth + 1));
+      }
+      
+      const copy = {};
+      const keys = Object.getOwnPropertyNames(val);
+      for (const key of keys) {
+        try {
+          copy[key] = clean(val[key], currentDepth + 1);
+        } catch (e) {
+          copy[key] = '[Unreadable: ' + e.message + ']';
+        }
+      }
+      return copy;
+    }
+    
+    try {
+      const cleaned = clean(obj, 0);
+      return JSON.stringify(cleaned, null, 2);
+    } catch (e) {
+      try {
+        let keys = [];
+        for (let k in obj) {
+          keys.push(k);
+        }
+        return `[Failed to serialize object. Keys: ${keys.join(', ')}. Error: ${e.message}]`;
+      } catch (e2) {
+        return `[Failed to serialize object: ${String(obj)}]`;
+      }
+    }
+  }
+
+  function formatWorkerError(err) {
+    if (!err) return 'Unknown error';
+    if (typeof err === 'string') return err;
+    if (err instanceof Error) {
+      return err.stack || `${err.name}: ${err.message}`;
+    }
+    if (err && typeof err === 'object') {
+      if (err.message && typeof err.message === 'string' && err.message !== '[object Object]') {
+        let msg = err.message;
+        if (err.filename) {
+          const parts = err.filename.split('/');
+          const filename = parts[parts.length - 1];
+          msg += ` at ${filename}:${err.lineno}:${err.colno}`;
+        }
+        if (err.error) {
+          if (err.error.stack) {
+            msg += `\nDetails: ${err.error.stack}`;
+          } else {
+            msg += `\nDetails: ${safeDump(err.error)}`;
+          }
+        }
+        return msg;
+      } else {
+        return safeDump(err);
+      }
+    }
+    return String(err);
+  }
 
   async function renderModel() {
     // If a worker is compiling, terminate it to cancel the current run
@@ -562,7 +701,12 @@ testshape();
         appendLog(msg.text, msg.logType);
       } else if (msg.type === 'success') {
         lastRenderedSTL = new Uint8Array(msg.buffer);
-        loadSTLIntoViewport(msg.buffer);
+        
+        const activeFile = localStorage.getItem("openscad_active_file") || "testShape";
+        const shouldResetCamera = (lastLoadedFile !== activeFile);
+        lastLoadedFile = activeFile;
+
+        loadSTLIntoViewport(msg.buffer, shouldResetCamera);
         appendLog('Model rendered in viewport successfully!', 'success');
         
         activeWorker.terminate();
@@ -573,7 +717,11 @@ testshape();
         statusDot.className = 'status-indicator';
         statusText.textContent = 'Ready';
       } else if (msg.type === 'error') {
-        appendLog('Compilation failed: ' + msg.message, 'error');
+        let errorMsg = msg.message;
+        if (errorMsg && typeof errorMsg === 'object') {
+          errorMsg = safeDump(errorMsg);
+        }
+        appendLog('Compilation failed: ' + errorMsg, 'error');
         
         activeWorker.terminate();
         activeWorker = null;
@@ -586,12 +734,14 @@ testshape();
     };
 
     activeWorker.onerror = function(err) {
-      appendLog('Worker error: ' + err.message, 'error');
+      const errorMsg = formatWorkerError(err);
+      appendLog('Worker error: ' + errorMsg, 'error');
       
       activeWorker.terminate();
       activeWorker = null;
 
       renderBtn.disabled = false;
+      downloadBtn.disabled = false;
       statusDot.className = 'status-indicator';
       statusText.textContent = 'Ready';
     };
