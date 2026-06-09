@@ -144,20 +144,30 @@ require(['vs/editor/editor.main'], async function () {
     }
   });
 
-  const initialCode = `module testshape()
+  const initialCode = `$fn=200;
+
+module testshape()
 {
   function r_from_dia(d) = d / 2;
 
   module rotcy(rot, r, h) {
     rotate(90, rot)
-      cylinder(r = r, h = h, center = true, $fn=20);
+      cylinder(r = r, h = h, center = true);
   }
 
   difference() {
-    sphere(r = r_from_dia(size), $fn=50);
+    sphere(r = r_from_dia(size));
     rotcy([0, 0, 0], cy_r, cy_h);
     rotcy([1, 0, 0], cy_r, cy_h);
     rotcy([0, 1, 0], cy_r, cy_h);
+    for (x_idx = [0 : 1]) {
+      for (y_idx = [0 : 3]) {
+        rotate([-45+x_idx*90, y_idx * 90, 0])
+          translate([0, 0 , 24])
+            linear_extrude(1)
+              text(str((x_idx * 4) + y_idx + 1), halign="center", valign="center");
+      }
+    }
   }
 
   size = 50;
