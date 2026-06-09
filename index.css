@@ -160,7 +160,9 @@ body {
   font-family: inherit;
   font-size: 0.9rem;
   font-weight: 600;
-  border: none;
+  color: var(--text-main);
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid var(--panel-border);
   padding: 12px 20px;
   border-radius: 6px;
   cursor: pointer;
@@ -172,26 +174,7 @@ body {
   flex: 1;
 }
 
-.render-btn {
-  color: #fff;
-  background: var(--accent-gradient);
-  box-shadow: 0 4px 15px rgba(161, 0, 255, 0.2);
-  border: 1px solid transparent;
-}
-
-.render-btn:hover {
-  transform: translateY(-1px);
-  box-shadow: 0 6px 20px rgba(0, 240, 255, 0.3);
-  filter: brightness(1.1);
-}
-
-.download-btn {
-  color: var(--text-main);
-  background: rgba(255, 255, 255, 0.05);
-  border: 1px solid var(--panel-border);
-}
-
-.download-btn:hover:not(:disabled) {
+.render-btn:hover:not(:disabled), .download-btn:hover:not(:disabled) {
   transform: translateY(-1px);
   background: rgba(255, 255, 255, 0.1);
   border-color: rgba(255, 255, 255, 0.2);
@@ -368,7 +351,6 @@ body {
   display: flex;
   align-items: center;
   gap: 10px;
-  width: 140px;
   flex: none;
 }
 
