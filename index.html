@@ -2,17 +2,27 @@
 <html>
   <head>
     <meta charset="utf-8">
-    <title>OpenSCAD WASM Playground</title>
+    <title>OpenSCAD</title>
     <meta name="description" content="An interactive, premium OpenSCAD playground in WebAssembly. Edit models in real-time, view compilation logs, and download 3D models.">
     <link rel="stylesheet" href="./index.css">
+    
     <!-- Load Monaco Editor Loader -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/monaco-editor/0.39.0/min/vs/loader.min.js"></script>
+    
+    <!-- Import Map for Three.js (r160) -->
+    <script type="importmap">
+      {
+        "imports": {
+          "three": "https://unpkg.com/three@0.160.0/build/three.module.js",
+          "three/addons/": "https://unpkg.com/three@0.160.0/examples/jsm/"
+        }
+      }
+    </script>
   </head>
   <body>
     <header class="header-bar">
       <div class="logo-section">
-        <h1>OpenSCAD WASM</h1>
-        <span class="logo-badge">Playground</span>
+        <h1>OpenSCAD</h1>
       </div>
       <div class="status-badge">
         <div id="status-dot" class="status-indicator"></div>
@@ -29,11 +39,37 @@
       </section>
 
       <section class="controls-panel">
-        <div class="controls-section">
-          <button id="render-btn" class="render-btn">
-            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="5 3 19 12 5 21 5 3"></polygon></svg>
-            Render & Download STL
-          </button>
+        <div class="controls-section" style="flex-direction: column; align-items: stretch;">
+          <div style="display: flex; gap: 12px; width: 100%;">
+            <button id="render-btn" class="render-btn">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="5 3 19 12 5 21 5 3"></polygon></svg>
+              Render 3D Preview
+            </button>
+            <button id="download-btn" class="download-btn" disabled>
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="7 10 12 15 17 10"></polyline><line x1="12" y1="15" x2="12" y2="3"></line></svg>
+              Download STL
+            </button>
+          </div>
+          <div style="display: flex; gap: 16px; align-items: flex-end; width: 100%;">
+            <div class="style-select-container" style="flex: 2;">
+              <label for="material-select">Style</label>
+               <select id="material-select" class="style-select">
+                 <option value="solid">Solid</option>
+                 <option value="normals">Normals</option>
+                 <option value="wireframe">Wireframe</option>
+               </select>
+            </div>
+            <div class="checkbox-container">
+              <input type="checkbox" id="grid-toggle" checked>
+              <label for="grid-toggle">Grid</label>
+            </div>
+          </div>
+        </div>
+
+        <div class="viewport-panel">
+          <div class="viewport-overlay-info" style="top: 12px; left: 12px; right: auto;">Orbit: Left Click | Zoom: Scroll | Pan: Right Click</div>
+          <div id="orientation-gizmo" style="position: absolute; top: 12px; right: 12px; width: 80px; height: 80px; pointer-events: none; z-index: 5;"></div>
+          <div id="viewport-container"></div>
         </div>
 
         <div class="terminal-section">
@@ -44,8 +80,8 @@
             </div>
           </header>
           <div id="terminal-output" class="terminal-output">
-            <div class="terminal-line info">Welcome to OpenSCAD WASM Playground!</div>
-            <div class="terminal-line info">Click 'Render & Download STL' to compile your 3D model.</div>
+            <div class="terminal-line info">Welcome to OpenSCAD!</div>
+            <div class="terminal-line info">Click 'Render 3D Preview' to compile and view your model.</div>
           </div>
         </div>
       </section>
@@ -55,12 +91,15 @@
       import OpenSCAD from "./openscad.js";
       import { addFonts } from "./openscad.fonts.js";
       import { addMCAD } from "./openscad.mcad.js";
+      import * as THREE from 'three';
+      import { STLLoader } from 'three/addons/loaders/STLLoader.js';
+      import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 
       // Configure Monaco Editor AMD Loader
       require.config({ paths: { vs: 'https://cdnjs.cloudflare.com/ajax/libs/monaco-editor/0.39.0/min/vs' } });
       
       require(['vs/editor/editor.main'], async function () {
-        // Register OpenSCAD language definition
+        // Register OpenSCAD language definition in Monaco
         monaco.languages.register({ id: 'openscad' });
         monaco.languages.setMonarchTokensProvider('openscad', {
           defaultToken: '',
@@ -124,18 +163,17 @@
           }
         });
 
-        const initialCode = `
-module example001()
+        const initialCode = `module testshape()
 {
   function r_from_dia(d) = d / 2;
 
   module rotcy(rot, r, h) {
     rotate(90, rot)
-      cylinder(r = r, h = h, center = true, $fn=10);
+      cylinder(r = r, h = h, center = true, $fn=20);
   }
 
   difference() {
-    sphere(r = r_from_dia(size), $fn=20);
+    sphere(r = r_from_dia(size), $fn=50);
     rotcy([0, 0, 0], cy_r, cy_h);
     rotcy([1, 0, 0], cy_r, cy_h);
     rotcy([0, 1, 0], cy_r, cy_h);
@@ -150,7 +188,7 @@ module example001()
 
 echo(version=version());
 
-example001();
+testshape();
 `;
 
         const editor = monaco.editor.create(document.getElementById('editor-container'), {
@@ -168,12 +206,15 @@ example001();
           }
         });
 
-        // Initialize UI Elements
+        // Initialize UI & ThreeJS variables
         const renderBtn = document.getElementById('render-btn');
+        const downloadBtn = document.getElementById('download-btn');
         const terminalOutput = document.getElementById('terminal-output');
         const clearBtn = document.getElementById('clear-terminal');
         const statusDot = document.getElementById('status-dot');
         const statusText = document.getElementById('status-text');
+
+        let lastRenderedSTL = null; // Buffer to hold rendered STL data
 
         function appendLog(text, type = '') {
           const line = document.createElement('div');
@@ -188,9 +229,266 @@ example001();
           appendLog('Console cleared.', 'info');
         });
 
+        // --- ThreeJS 3D Viewport Setup ---
+        let scene, camera, renderer, controls, currentMesh, gridHelper, axesHelper;
+        let gizmoScene, gizmoCamera, gizmoRenderer;
+
+        function initViewport() {
+          const container = document.getElementById('viewport-container');
+          const width = container.clientWidth;
+          const height = container.clientHeight;
+
+          // Scene
+          scene = new THREE.Scene();
+          scene.background = new THREE.Color(0x12141c);
+
+          // Camera
+          camera = new THREE.PerspectiveCamera(45, width / height, 0.1, 1000);
+          camera.position.set(40, 40, 60);
+
+          // Renderer
+          renderer = new THREE.WebGLRenderer({ antialias: true });
+          renderer.setSize(width, height);
+          renderer.setPixelRatio(window.devicePixelRatio);
+          container.appendChild(renderer.domElement);
+
+          // Controls (Inertia Damping Disabled as requested!)
+          controls = new OrbitControls(camera, renderer.domElement);
+          controls.enableDamping = false;
+          controls.screenSpacePanning = true;
+
+          // Lighting
+          const ambientLight = new THREE.AmbientLight(0x555555);
+          scene.add(ambientLight);
+
+          const dirLight1 = new THREE.DirectionalLight(0xffffff, 0.75);
+          dirLight1.position.set(1, 1, 1).normalize();
+          scene.add(dirLight1);
+
+          const dirLight2 = new THREE.DirectionalLight(0x334466, 0.5);
+          dirLight2.position.set(-1, -1, -1).normalize();
+          scene.add(dirLight2);
+
+          const pointLight = new THREE.PointLight(0x00f0ff, 0.6, 150);
+          pointLight.position.set(0, 30, 20);
+          scene.add(pointLight);
+
+          // Grid Helper
+          gridHelper = new THREE.GridHelper(100, 30, 0x00f0ff, 0x222633);
+          gridHelper.position.y = -0.01;
+          scene.add(gridHelper);
+
+          // Axes Helper
+          axesHelper = new THREE.AxesHelper(15);
+          axesHelper.position.y = 0.01; // Slightly offset to avoid z-fighting
+          scene.add(axesHelper);
+
+          // Initialize Orientation Gizmo
+          initGizmo();
+
+          // Animation Loop
+          function animate() {
+            requestAnimationFrame(animate);
+            controls.update();
+            renderer.render(scene, camera);
+            updateGizmo(); // Synchronize and render coordinate gizmo!
+          }
+          animate();
+
+          // Resize Handler
+          window.addEventListener('resize', () => {
+            const w = container.clientWidth;
+            const h = container.clientHeight;
+            camera.aspect = w / h;
+            camera.updateProjectionMatrix();
+            renderer.setSize(w, h);
+            
+            // Gizmo Resize
+            const gizmoContainer = document.getElementById('orientation-gizmo');
+            const gw = gizmoContainer.clientWidth;
+            const gh = gizmoContainer.clientHeight;
+            gizmoRenderer.setSize(gw, gh);
+          });
+        }
+
+        // --- Orientation Gizmo Setup ---
+        function initGizmo() {
+          const container = document.getElementById('orientation-gizmo');
+          const width = container.clientWidth;
+          const height = container.clientHeight;
+
+          gizmoScene = new THREE.Scene();
+
+          // Orthographic Camera for alignment
+          gizmoCamera = new THREE.OrthographicCamera(-2, 2, 2, -2, 0.1, 100);
+          gizmoCamera.position.set(0, 0, 10);
+
+          // Renderer (alpha: true for transparent background)
+          gizmoRenderer = new THREE.WebGLRenderer({ alpha: true, antialias: true });
+          gizmoRenderer.setSize(width, height);
+          gizmoRenderer.setPixelRatio(window.devicePixelRatio);
+          container.appendChild(gizmoRenderer.domElement);
+
+          // Lighting for Gizmo
+          const ambientLight = new THREE.AmbientLight(0xffffff, 0.8);
+          gizmoScene.add(ambientLight);
+          const dirLight = new THREE.DirectionalLight(0xffffff, 0.6);
+          dirLight.position.set(1, 1, 2).normalize();
+          gizmoScene.add(dirLight);
+
+          // Materials (X = Red, Y = Green, Z = Blue)
+          const matX = new THREE.MeshBasicMaterial({ color: 0xff3b30 });
+          const matY = new THREE.MeshBasicMaterial({ color: 0x34c759 });
+          const matZ = new THREE.MeshBasicMaterial({ color: 0x007aff });
+          const matNeg = new THREE.MeshBasicMaterial({ color: 0x2c2c2e, transparent: true, opacity: 0.6 });
+
+          // Geometry components
+          const stemGeo = new THREE.CylinderGeometry(0.06, 0.06, 1.2, 8);
+          const headGeo = new THREE.SphereGeometry(0.24, 16, 16);
+
+          // X Axis (+) - Red
+          const stemX = new THREE.Mesh(stemGeo, matX);
+          stemX.rotation.z = -Math.PI / 2;
+          stemX.position.x = 0.6;
+          const headX = new THREE.Mesh(headGeo, matX);
+          headX.position.x = 1.2;
+          gizmoScene.add(stemX, headX);
+
+          // Y Axis (+) - Green
+          const stemY = new THREE.Mesh(stemGeo, matY);
+          stemY.position.y = 0.6;
+          const headY = new THREE.Mesh(headGeo, matY);
+          headY.position.y = 1.2;
+          gizmoScene.add(stemY, headY);
+
+          // Z Axis (+) - Blue
+          const stemZ = new THREE.Mesh(stemGeo, matZ);
+          stemZ.rotation.x = Math.PI / 2;
+          stemZ.position.z = 0.6;
+          const headZ = new THREE.Mesh(headGeo, matZ);
+          headZ.position.z = 1.2;
+          gizmoScene.add(stemZ, headZ);
+
+          // Negative Axes (-) - Dark Grey circles
+          const headNegX = new THREE.Mesh(headGeo, matNeg);
+          headNegX.position.x = -1.2;
+          const headNegY = new THREE.Mesh(headGeo, matNeg);
+          headNegY.position.y = -1.2;
+          const headNegZ = new THREE.Mesh(headGeo, matNeg);
+          headNegZ.position.z = -1.2;
+          gizmoScene.add(headNegX, headNegY, headNegZ);
+        }
+
+        function updateGizmo() {
+          if (!gizmoCamera || !camera) return;
+
+          // Sync gizmo rotation to mirror main camera rotation
+          gizmoCamera.quaternion.copy(camera.quaternion);
+
+          // Reposition camera along camera direction vector relative to gizmo origin
+          const dir = new THREE.Vector3(0, 0, 10);
+          dir.applyQuaternion(camera.quaternion);
+          gizmoCamera.position.copy(dir);
+
+          gizmoCamera.lookAt(0, 0, 0);
+          gizmoRenderer.render(gizmoScene, gizmoCamera);
+        }
+
+        function getSelectedMaterial() {
+          const style = document.getElementById('material-select').value;
+          if (style === 'normals') {
+            return new THREE.MeshNormalMaterial({
+              flatShading: true
+            });
+          } else if (style === 'wireframe') {
+            return new THREE.MeshBasicMaterial({
+              color: 0x00f0ff,
+              wireframe: true
+            });
+          } else { // 'solid'
+            return new THREE.MeshStandardMaterial({
+              color: 0x9d4edd, // Bright violet
+              roughness: 0.35,
+              metalness: 0.15,
+              flatShading: true
+            });
+          }
+        }
+
+        function updateMeshMaterial(style) {
+          if (!currentMesh) return;
+          const mesh = currentMesh.children[0];
+          if (!mesh) return;
+          mesh.material = getSelectedMaterial();
+          appendLog(`Viewport material updated to: ${style}`, 'info');
+        }
+
+        function loadSTLIntoViewport(arrayBuffer) {
+          if (currentMesh) {
+            scene.remove(currentMesh);
+          }
+
+          const loader = new STLLoader();
+          let geometry;
+          try {
+            geometry = loader.parse(arrayBuffer);
+          } catch (e) {
+            appendLog('Three.js failed to parse STL: ' + e.message, 'error');
+            return;
+          }
+
+          const material = getSelectedMaterial();
+          const mesh = new THREE.Mesh(geometry, material);
+
+          // Compute boundaries and auto-center
+          geometry.computeBoundingBox();
+          const boundingBox = geometry.boundingBox;
+          const center = new THREE.Vector3();
+          boundingBox.getCenter(center);
+
+          // Offset the geometry to align the bounding box center with the origin
+          mesh.position.set(-center.x, -center.y, -center.z);
+
+          const group = new THREE.Group();
+          group.add(mesh);
+          scene.add(group);
+          currentMesh = group;
+
+          // Adjust camera to fit the model bounding box
+          const size = new THREE.Vector3();
+          boundingBox.getSize(size);
+          const maxDim = Math.max(size.x, size.y, size.z);
+          const fov = camera.fov * (Math.PI / 180);
+          let cameraZ = Math.abs(maxDim / 2 / Math.tan(fov / 2));
+          
+          cameraZ *= 1.7; // Factor to add spacing around the model
+          camera.position.set(cameraZ * 0.7, cameraZ * 0.7, cameraZ);
+          camera.lookAt(new THREE.Vector3(0, 0, 0));
+          controls.target.set(0, 0, 0);
+          controls.update();
+        }
+
+        // Initialize 3D Viewport
+        initViewport();
+
+        // Listen for material style changes
+        document.getElementById('material-select').addEventListener('change', (e) => {
+          updateMeshMaterial(e.target.value);
+        });
+
+        // Listen for grid visibility changes
+        document.getElementById('grid-toggle').addEventListener('change', (e) => {
+          if (gridHelper) {
+            gridHelper.visible = e.target.checked;
+          }
+          if (axesHelper) {
+            axesHelper.visible = e.target.checked;
+          }
+        });
+
+        // Pre-load OpenSCAD WebAssembly module
         appendLog('Pre-loading OpenSCAD WebAssembly module...', 'info');
         try {
-          // Instantiate a dummy instance just to trigger download/caching of WASM binary
           await OpenSCAD({ noInitialRun: true });
           appendLog('OpenSCAD WASM Module pre-loaded and cached successfully.', 'success');
         } catch (e) {
@@ -203,8 +501,10 @@ example001();
           return;
         }
 
+        // --- Render Click Handler ---
         renderBtn.addEventListener('click', async () => {
           renderBtn.disabled = true;
+          downloadBtn.disabled = true;
           statusDot.className = 'status-indicator busy';
           statusText.textContent = 'Rendering...';
           appendLog('Initializing fresh OpenSCAD instance...', 'info');
@@ -237,35 +537,52 @@ example001();
             // Create locale directory to avoid localization warning
             instance.FS.mkdir("/locale");
 
-            const filename = "cube.stl";
+            const filename = "output.stl";
             const code = editor.getValue();
 
             // Write the current editor script to the virtual FS
             instance.FS.writeFile("/input.scad", code);
 
             appendLog('Compiling & rendering model...', 'info');
-            // Execute main
+            
+            // Execute main compilation
             instance.callMain(["/input.scad", "--backend=Manifold", "-o", filename]);
 
-            // Read output
+            // Read the output STL byte array
             const output = instance.FS.readFile("/" + filename);
 
-            // Trigger download
-            const blob = new Blob([output], { type: "application/octet-stream" });
-            const link = document.createElement("a");
-            link.href = URL.createObjectURL(blob);
-            link.download = filename;
-            document.body.append(link);
-            link.click();
-            link.remove();
+            // Save rendering buffer for download
+            lastRenderedSTL = output;
 
-            appendLog('Model rendered and download started successfully!', 'success');
+            // Load STL geometry into the Three.js viewport
+            loadSTLIntoViewport(output.buffer);
+
+            appendLog('Model rendered in viewport successfully!', 'success');
+            downloadBtn.disabled = false; // Enable download button
           } catch (err) {
             appendLog('Compilation failed: ' + (err.message ? err.message : err), 'error');
           } finally {
             renderBtn.disabled = false;
             statusDot.className = 'status-indicator';
             statusText.textContent = 'Ready';
+          }
+        });
+
+        // --- Download Click Handler ---
+        downloadBtn.addEventListener('click', () => {
+          if (!lastRenderedSTL) return;
+          
+          try {
+            const blob = new Blob([lastRenderedSTL], { type: "application/octet-stream" });
+            const link = document.createElement("a");
+            link.href = URL.createObjectURL(blob);
+            link.download = "model.stl";
+            document.body.append(link);
+            link.click();
+            link.remove();
+            appendLog('STL file downloaded successfully.', 'success');
+          } catch (e) {
+            appendLog('Download failed: ' + e.message, 'error');
           }
         });
       });
