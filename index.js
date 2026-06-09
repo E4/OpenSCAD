@@ -146,7 +146,7 @@ require(['vs/editor/editor.main'], async function () {
 
   const initialCode = `$fn=200;
 
-module testshape()
+module demoshape()
 {
   function r_from_dia(d) = d / 2;
 
@@ -179,7 +179,7 @@ module testshape()
 
 echo(version=version());
 
-testshape();
+demoshape();
 `;
 
   const editor = monaco.editor.create(document.getElementById('editor-container'), {
@@ -248,7 +248,7 @@ testshape();
   let lastLoadedFile = null;
 
   function saveCurrentFile() {
-    const activeFile = localStorage.getItem("openscad_active_file") || "testShape";
+    const activeFile = localStorage.getItem("openscad_active_file") || "Demo Shape";
     const code = editor.getValue();
     let files = JSON.parse(localStorage.getItem("openscad_files") || "{}");
     files[activeFile] = code;
@@ -259,7 +259,7 @@ testshape();
     const fileSelect = document.getElementById('file-select');
     fileSelect.innerHTML = '';
     const files = JSON.parse(localStorage.getItem("openscad_files") || "{}");
-    const activeFile = localStorage.getItem("openscad_active_file") || "testShape";
+    const activeFile = localStorage.getItem("openscad_active_file") || "Demo Shape";
     
     for (const name in files) {
       const option = document.createElement('option');
@@ -274,14 +274,14 @@ testshape();
 
   // Initialize files in localStorage if not present
   let localFiles = JSON.parse(localStorage.getItem("openscad_files") || "{}");
-  if (!localFiles["testShape"]) {
-    localFiles["testShape"] = initialCode;
+  if (!localFiles["Demo Shape"]) {
+    localFiles["Demo Shape"] = initialCode;
     localStorage.setItem("openscad_files", JSON.stringify(localFiles));
   }
-  let activeFile = localStorage.getItem("openscad_active_file") || "testShape";
+  let activeFile = localStorage.getItem("openscad_active_file") || "Demo Shape";
   if (!localFiles[activeFile]) {
-    activeFile = "testShape";
-    localStorage.setItem("openscad_active_file", "testShape");
+    activeFile = "Demo Shape";
+    localStorage.setItem("openscad_active_file", "Demo Shape");
   }
 
   updateFileSelectOptions();
@@ -350,8 +350,8 @@ testshape();
   // Delete File handler
   const deleteFileBtn = document.getElementById('delete-file-btn');
   deleteFileBtn.addEventListener('click', () => {
-    const activeFile = localStorage.getItem("openscad_active_file") || "testShape";
-    if (activeFile === "testShape") {
+    const activeFile = localStorage.getItem("openscad_active_file") || "Demo Shape";
+    if (activeFile === "Demo Shape") {
       alert("Cannot delete the default template shape.");
       return;
     }
@@ -362,12 +362,12 @@ testshape();
     delete files[activeFile];
     
     localStorage.setItem("openscad_files", JSON.stringify(files));
-    localStorage.setItem("openscad_active_file", "testShape");
+    localStorage.setItem("openscad_active_file", "Demo Shape");
     
     updateFileSelectOptions();
     
     isSwitchingFile = true;
-    editor.setValue(files["testShape"] || initialCode);
+    editor.setValue(files["Demo Shape"] || initialCode);
     isSwitchingFile = false;
     
     appendLog(`Deleted "${activeFile}"`, 'info');
@@ -786,7 +786,7 @@ testshape();
       } else if (msg.type === 'success') {
         lastRenderedSTL = new Uint8Array(msg.buffer);
         
-        const activeFile = localStorage.getItem("openscad_active_file") || "testShape";
+        const activeFile = localStorage.getItem("openscad_active_file") || "Demo Shape";
         const shouldResetCamera = (lastLoadedFile !== activeFile);
         lastLoadedFile = activeFile;
 
