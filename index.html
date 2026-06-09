@@ -20,33 +20,10 @@
     </script>
   </head>
   <body>
-    <header class="header-bar">
-      <div class="logo-section">
-        <h1>OpenSCAD</h1>
-      </div>
-      <div class="status-badge">
-        <div id="status-dot" class="status-indicator"></div>
-        <span id="status-text">Ready</span>
-      </div>
-    </header>
-
     <div class="workspace-container">
-      <section class="editor-panel">
-        <header class="panel-header">
-          <span class="panel-title">Editor</span>
-          <div class="file-controls" style="display: flex; gap: 8px; align-items: center;">
-            <span id="save-status" style="font-size: 0.75rem; color: var(--text-muted); min-width: 60px; text-align: right; font-style: italic;"></span>
-            <select id="file-select" class="style-select" style="padding: 4px 8px; font-size: 0.8rem; width: 140px; height: 28px; margin: 0;"></select>
-            <button id="new-file-btn" class="terminal-btn" style="padding: 4px 8px; font-size: 0.8rem; height: 28px; margin: 0;">New</button>
-            <button id="delete-file-btn" class="terminal-btn" style="padding: 4px 8px; font-size: 0.8rem; height: 28px; margin: 0; color: var(--error-color); border-color: rgba(255, 23, 68, 0.3);">Delete</button>
-          </div>
-        </header>
-        <div id="editor-container"></div>
-      </section>
-
       <section class="controls-panel">
-        <div class="controls-section" style="flex-direction: column; align-items: stretch;">
-          <div style="display: flex; gap: 12px; width: 100%;">
+        <div class="controls-section">
+          <div class="buttons-row">
             <button id="render-btn" class="render-btn">
               <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="5 3 19 12 5 21 5 3"></polygon></svg>
               Render 3D Preview
@@ -56,8 +33,8 @@
               Download STL
             </button>
           </div>
-          <div style="display: flex; gap: 16px; align-items: flex-end; width: 100%;">
-            <div class="style-select-container" style="flex: 2;">
+          <div class="options-row">
+            <div class="style-select-container">
               <label for="material-select">Style</label>
                <select id="material-select" class="style-select">
                  <option value="solid">Solid</option>
@@ -70,21 +47,27 @@
               <label for="grid-toggle">Grid</label>
             </div>
             <div class="checkbox-container">
-              <input type="checkbox" id="auto-render-toggle">
+              <input type="checkbox" id="auto-render-toggle" checked>
               <label for="auto-render-toggle">Auto-Render</label>
             </div>
           </div>
         </div>
 
         <div class="viewport-panel">
-          <div class="viewport-overlay-info" style="top: 12px; left: 12px; right: auto;">Orbit: Left Click | Zoom: Scroll | Pan: Right Click</div>
-          <div id="orientation-gizmo" style="position: absolute; top: 12px; right: 12px; width: 80px; height: 80px; pointer-events: none; z-index: 5;"></div>
+          <div class="viewport-overlay-info">Orbit: Left Click | Zoom: Scroll | Pan: Right Click</div>
+          <div id="orientation-gizmo"></div>
           <div id="viewport-container"></div>
         </div>
 
         <div class="terminal-section">
           <header class="terminal-header">
-            <span class="panel-title">Console Output</span>
+            <div class="terminal-title-container">
+              <span class="panel-title">Console Output</span>
+              <div class="status-badge">
+                <div id="status-dot" class="status-indicator"></div>
+                <span id="status-text">Ready</span>
+              </div>
+            </div>
             <div class="terminal-actions">
               <button id="clear-terminal" class="terminal-btn">Clear</button>
             </div>
@@ -95,12 +78,21 @@
           </div>
         </div>
       </section>
+
+      <section class="editor-panel">
+        <header class="panel-header">
+          <span class="panel-title">Editor</span>
+          <div class="file-controls">
+            <select id="file-select" class="style-select"></select>
+            <button id="new-file-btn" class="terminal-btn">New</button>
+            <button id="delete-file-btn" class="terminal-btn">Delete</button>
+          </div>
+        </header>
+        <div id="editor-container"></div>
+      </section>
     </div>
 
     <script type="module">
-      import OpenSCAD from "./openscad.js";
-      import { addFonts } from "./openscad.fonts.js";
-      import { addMCAD } from "./openscad.mcad.js";
       import * as THREE from 'three';
       import { STLLoader } from 'three/addons/loaders/STLLoader.js';
       import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
@@ -296,7 +288,8 @@ testshape();
           editor.setValue(files[newActiveFile] || "");
           isSwitchingFile = false;
           
-          document.getElementById('save-status').textContent = '';
+          // Trigger render when switching files
+          renderModel();
         });
 
         // New File handler
@@ -337,7 +330,6 @@ testshape();
           editor.setValue("");
           isSwitchingFile = false;
           
-          document.getElementById('save-status').textContent = '';
           appendLog(`Created new file "${trimmedName}"`, 'info');
         });
 
@@ -364,7 +356,6 @@ testshape();
           editor.setValue(files["testShape"] || initialCode);
           isSwitchingFile = false;
           
-          document.getElementById('save-status').textContent = '';
           appendLog(`Deleted "${activeFile}"`, 'info');
         });
 
@@ -373,13 +364,10 @@ testshape();
         editor.onDidChangeModelContent(() => {
           if (isSwitchingFile) return;
           
-          document.getElementById('save-status').textContent = 'Saving...';
-          
           if (changeTimeout) clearTimeout(changeTimeout);
           
           changeTimeout = setTimeout(() => {
             saveCurrentFile();
-            document.getElementById('save-status').textContent = 'Saved';
             
             if (document.getElementById('auto-render-toggle').checked) {
               renderModel();
@@ -644,87 +632,66 @@ testshape();
           }
         });
 
-        // Pre-load OpenSCAD WebAssembly module
-        appendLog('Pre-loading OpenSCAD WebAssembly module...', 'info');
-        try {
-          await OpenSCAD({ noInitialRun: true });
-          appendLog('OpenSCAD WASM Module pre-loaded and cached successfully.', 'success');
-        } catch (e) {
-          appendLog('Failed to pre-load OpenSCAD WASM: ' + e.message, 'error');
-          statusDot.className = 'status-indicator';
-          statusDot.style.backgroundColor = 'var(--error-color)';
-          statusDot.style.boxShadow = '0 0 8px var(--error-color)';
-          statusText.textContent = 'Failed to load';
-          renderBtn.disabled = true;
-          return;
-        }
-
         // --- Render function and handlers ---
+        let activeWorker = null;
+
         async function renderModel() {
-          if (renderBtn.disabled) return;
+          // If a worker is compiling, terminate it to cancel the current run
+          if (activeWorker) {
+            activeWorker.terminate();
+            activeWorker = null;
+            appendLog('Previous compilation cancelled.', 'info');
+          }
+
           renderBtn.disabled = true;
           downloadBtn.disabled = true;
           statusDot.className = 'status-indicator busy';
           statusText.textContent = 'Rendering...';
-          appendLog('Initializing fresh OpenSCAD instance...', 'info');
 
-          // Yield execution to allow UI updates
-          await new Promise(r => setTimeout(r, 50));
+          // Spawn a new background worker (using ES module type)
+          activeWorker = new Worker('./openscad-worker.js', { type: 'module' });
 
-          try {
-            // Instantiate a fresh OpenSCAD instance on each run
-            const instance = await OpenSCAD({
-              noInitialRun: true,
-              print: function(text) {
-                appendLog(text);
-              },
-              printErr: function(text) {
-                appendLog(text, 'warning');
-              },
-              ENV: {
-                FONTCONFIG_FILE: "/fonts/fonts.conf",
-                FONTCONFIG_PATH: "/fonts"
-              }
-            });
+          activeWorker.onmessage = function(e) {
+            const msg = e.data;
+            if (msg.type === 'log') {
+              appendLog(msg.text, msg.logType);
+            } else if (msg.type === 'success') {
+              lastRenderedSTL = new Uint8Array(msg.buffer);
+              loadSTLIntoViewport(msg.buffer);
+              appendLog('Model rendered in viewport successfully!', 'success');
+              
+              activeWorker.terminate();
+              activeWorker = null;
 
-            // Add fonts to the FS
-            addFonts(instance);
+              renderBtn.disabled = false;
+              downloadBtn.disabled = false;
+              statusDot.className = 'status-indicator';
+              statusText.textContent = 'Ready';
+            } else if (msg.type === 'error') {
+              appendLog('Compilation failed: ' + msg.message, 'error');
+              
+              activeWorker.terminate();
+              activeWorker = null;
 
-            // Add MCAD library to the FS
-            addMCAD(instance);
+              renderBtn.disabled = false;
+              statusDot.className = 'status-indicator';
+              statusText.textContent = 'Ready';
+            }
+          };
 
-            // Create locale directory to avoid localization warning
-            instance.FS.mkdir("/locale");
-
-            const filename = "output.stl";
-            const code = editor.getValue();
-
-            // Write the current editor script to the virtual FS
-            instance.FS.writeFile("/input.scad", code);
-
-            appendLog('Compiling & rendering model...', 'info');
+          activeWorker.onerror = function(err) {
+            appendLog('Worker error: ' + err.message, 'error');
             
-            // Execute main compilation
-            instance.callMain(["/input.scad", "--backend=Manifold", "-o", filename]);
+            activeWorker.terminate();
+            activeWorker = null;
 
-            // Read the output STL byte array
-            const output = instance.FS.readFile("/" + filename);
-
-            // Save rendering buffer for download
-            lastRenderedSTL = output;
-
-            // Load STL geometry into the Three.js viewport
-            loadSTLIntoViewport(output.buffer);
-
-            appendLog('Model rendered in viewport successfully!', 'success');
-            downloadBtn.disabled = false; // Enable download button
-          } catch (err) {
-            appendLog('Compilation failed: ' + (err.message ? err.message : err), 'error');
-          } finally {
             renderBtn.disabled = false;
             statusDot.className = 'status-indicator';
             statusText.textContent = 'Ready';
-          }
+          };
+
+          const code = editor.getValue();
+          activeWorker.postMessage({ type: 'compile', code: code });
         }
 
         renderBtn.addEventListener('click', renderModel);
@@ -746,6 +713,9 @@ testshape();
             appendLog('Download failed: ' + e.message, 'error');
           }
         });
+
+        // Trigger initial render
+        renderModel();
       });
     </script>
   </body>

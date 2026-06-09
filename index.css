@@ -72,7 +72,7 @@ body {
   display: flex;
   align-items: center;
   gap: 6px;
-  font-size: 0.85rem;
+  font-size: 0.75rem;
   color: var(--text-muted);
 }
 
@@ -94,16 +94,16 @@ body {
 .workspace-container {
   display: flex;
   flex: 1;
-  height: calc(100vh - 60px);
+  height: 100vh;
   width: 100%;
 }
 
-/* Editor Panel (Left) */
+/* Editor Panel (Right) */
 .editor-panel {
   flex: 3;
   min-width: 400px;
   height: 100%;
-  border-right: 1px solid var(--panel-border);
+  border-left: 1px solid var(--panel-border);
   display: flex;
   flex-direction: column;
   position: relative;
@@ -111,6 +111,7 @@ body {
 
 .panel-header {
   height: 48px;
+  flex-shrink: 0;
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -148,6 +149,7 @@ body {
   padding: 16px 24px;
   border-bottom: 1px solid var(--panel-border);
   display: flex;
+  flex-shrink: 0;
   gap: 12px;
   background: rgba(15, 17, 26, 0.3);
   flex-direction: column;
@@ -174,6 +176,7 @@ body {
   color: #fff;
   background: var(--accent-gradient);
   box-shadow: 0 4px 15px rgba(161, 0, 255, 0.2);
+  border: 1px solid transparent;
 }
 
 .render-btn:hover {
@@ -241,7 +244,7 @@ body {
 .viewport-overlay-info {
   position: absolute;
   top: 12px;
-  right: 12px;
+  left: 12px;
   background: rgba(11, 12, 16, 0.7);
   padding: 4px 8px;
   border-radius: 4px;
@@ -264,6 +267,7 @@ body {
 
 .terminal-header {
   height: 40px;
+  flex-shrink: 0;
   background: #0f111a;
   display: flex;
   align-items: center;
@@ -364,7 +368,8 @@ body {
   display: flex;
   align-items: center;
   gap: 10px;
-  width: 100%;
+  width: 140px;
+  flex: none;
 }
 
 .style-select-container label {
@@ -453,4 +458,60 @@ body {
   letter-spacing: 0.5px;
   color: var(--text-muted);
   cursor: pointer;
+}
+
+/* Layout helper rows and cleaned inline elements */
+.buttons-row {
+  display: flex;
+  gap: 12px;
+  width: 100%;
+}
+
+.options-row {
+  display: flex;
+  gap: 16px;
+  align-items: flex-end;
+  width: 100%;
+}
+
+#orientation-gizmo {
+  position: absolute;
+  top: 12px;
+  right: 12px;
+  width: 80px;
+  height: 80px;
+  pointer-events: none;
+  z-index: 5;
+}
+
+.terminal-title-container {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.file-controls {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+
+#file-select {
+  padding: 4px 8px;
+  font-size: 0.8rem;
+  width: 140px;
+  height: 28px;
+  margin: 0;
+}
+
+#new-file-btn, #delete-file-btn {
+  padding: 4px 8px;
+  font-size: 0.8rem;
+  height: 28px;
+  margin: 0;
+}
+
+#delete-file-btn {
+  color: var(--error-color);
+  border-color: rgba(255, 23, 68, 0.3);
 }
