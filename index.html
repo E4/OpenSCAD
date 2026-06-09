@@ -1,38 +1,130 @@
 <!doctype html>
 <html>
   <head>
+    <meta charset="utf-8">
+    <title>OpenSCAD WASM Playground</title>
+    <meta name="description" content="An interactive, premium OpenSCAD playground in WebAssembly. Edit models in real-time, view compilation logs, and download 3D models.">
+    <link rel="stylesheet" href="./index.css">
+    <!-- Load Monaco Editor Loader -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/monaco-editor/0.39.0/min/vs/loader.min.js"></script>
+  </head>
+  <body>
+    <header class="header-bar">
+      <div class="logo-section">
+        <h1>OpenSCAD WASM</h1>
+        <span class="logo-badge">Playground</span>
+      </div>
+      <div class="status-badge">
+        <div id="status-dot" class="status-indicator"></div>
+        <span id="status-text">Ready</span>
+      </div>
+    </header>
+
+    <div class="workspace-container">
+      <section class="editor-panel">
+        <header class="panel-header">
+          <span class="panel-title">Editor (input.scad)</span>
+        </header>
+        <div id="editor-container"></div>
+      </section>
+
+      <section class="controls-panel">
+        <div class="controls-section">
+          <button id="render-btn" class="render-btn">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="5 3 19 12 5 21 5 3"></polygon></svg>
+            Render & Download STL
+          </button>
+        </div>
+
+        <div class="terminal-section">
+          <header class="terminal-header">
+            <span class="panel-title">Console Output</span>
+            <div class="terminal-actions">
+              <button id="clear-terminal" class="terminal-btn">Clear</button>
+            </div>
+          </header>
+          <div id="terminal-output" class="terminal-output">
+            <div class="terminal-line info">Welcome to OpenSCAD WASM Playground!</div>
+            <div class="terminal-line info">Click 'Render & Download STL' to compile your 3D model.</div>
+          </div>
+        </div>
+      </section>
+    </div>
+
     <script type="module">
-
       import OpenSCAD from "./openscad.js";
-
-      // OPTIONAL: add fonts to the FS
       import { addFonts } from "./openscad.fonts.js";
-
-      // OPTIONAL: add MCAD library to the FS
       import { addMCAD } from "./openscad.mcad.js";
 
-      const filename = "cube.stl";
+      // Configure Monaco Editor AMD Loader
+      require.config({ paths: { vs: 'https://cdnjs.cloudflare.com/ajax/libs/monaco-editor/0.39.0/min/vs' } });
+      
+      require(['vs/editor/editor.main'], async function () {
+        // Register OpenSCAD language definition
+        monaco.languages.register({ id: 'openscad' });
+        monaco.languages.setMonarchTokensProvider('openscad', {
+          defaultToken: '',
+          tokenPostfix: '.scad',
+          keywords: [
+            'module', 'function', 'use', 'include', 'for', 'intersection', 
+            'difference', 'union', 'if', 'else', 'let', 'each', 'true', 'false'
+          ],
+          builtins: [
+            'cube', 'sphere', 'cylinder', 'polyhedron', 'square', 'circle', 
+            'polygon', 'text', 'linear_extrude', 'rotate_extrude', 'rotate', 
+            'translate', 'scale', 'resize', 'mirror', 'multmatrix', 'color', 
+            'offset', 'hull', 'minkowski', 'union', 'difference', 'intersection',
+            'echo', 'version', 'version_num'
+          ],
+          operators: [
+            '=', '>', '<', '!', '~', '?', ':', '==', '<=', '>=', '!=',
+            '&&', '||', '+', '-', '*', '/', '%', '^'
+          ],
+          symbols:  /[=><!~?:&|+\-*\/\^%]+/,
+          escapes: /\\(?:[abfnrtv\\"']|x[0-9A-Fa-f]{1,4}|u[0-9A-Fa-f]{4}|U[0-9A-Fa-f]{8})/,
+          tokenizer: {
+            root: [
+              [/[a-zA-Z_]\w*/, {
+                cases: {
+                  '@keywords': 'keyword',
+                  '@builtins': 'predefined',
+                  '@default': 'identifier'
+                }
+              }],
+              { include: '@whitespace' },
+              [/[{}()\[\]]/, '@brackets'],
+              [/@symbols/, {
+                cases: {
+                  '@operators': 'operator',
+                  '@default': ''
+                }
+              }],
+              [/\d*\.\d+([eE][\-+]?\d+)?/, 'number.float'],
+              [/\d+/, 'number'],
+              [/[;,.]/, 'delimiter'],
+              [/"([^"\\]|\\.)*$/, 'string.invalid'],
+              [/"/, 'string', '@string'],
+            ],
+            whitespace: [
+              [/[ \t\r\n]+/, ''],
+              [/\/\*/, 'comment', '@comment'],
+              [/\/\/.*$/, 'comment'],
+            ],
+            comment: [
+              [/[^\/*]+/, 'comment'],
+              [/\*\//, 'comment', '@pop'],
+              [/[\/*]/, 'comment']
+            ],
+            string: [
+              [/[^\\"]+/, 'string'],
+              [/@escapes/, 'string.escape'],
+              [/\\./, 'string.invalid'],
+              [/"/, 'string', '@pop']
+            ]
+          }
+        });
 
-      // Instantiate the application
-      const instance = await OpenSCAD({
-        noInitialRun: true,
-        ENV: {
-          FONTCONFIG_FILE: "/fonts/fonts.conf",
-          FONTCONFIG_PATH: "/fonts"
-        }
-      });
-
-      // Populate fonts in the virtual filesystem
-      addFonts(instance);
-
-      // Populate MCAD library in the virtual filesystem
-      addMCAD(instance);
-
-      // Create locale directory to avoid localization warning
-      instance.FS.mkdir("/locale");
-
-      // Write a file to the filesystem
-      instance.FS.writeFile("/input.scad", `
+        const initialCode = `
 module example001()
 {
   function r_from_dia(d) = d / 2;
@@ -59,21 +151,124 @@ module example001()
 echo(version=version());
 
 example001();
-`); // OpenSCAD script
+`;
 
-      // Run like a command-line program with arguments
-      instance.callMain(["/input.scad", "--backend=Manifold", "-o", filename]); // manifold is faster at rendering
+        const editor = monaco.editor.create(document.getElementById('editor-container'), {
+          value: initialCode,
+          language: 'openscad',
+          theme: 'vs-dark',
+          automaticLayout: true,
+          fontFamily: 'Fira Code, monospace',
+          fontSize: 14,
+          lineHeight: 22,
+          minimap: { enabled: false },
+          scrollbar: {
+            verticalScrollbarSize: 8,
+            horizontalScrollbarSize: 8
+          }
+        });
 
-      // Read the output 3D-model into a JS byte-array
-      const output = instance.FS.readFile("/"+filename);
+        // Initialize UI Elements
+        const renderBtn = document.getElementById('render-btn');
+        const terminalOutput = document.getElementById('terminal-output');
+        const clearBtn = document.getElementById('clear-terminal');
+        const statusDot = document.getElementById('status-dot');
+        const statusText = document.getElementById('status-text');
 
-      // Generate a link to output 3D-model and download the output STL file
-      const link = document.createElement("a");
-      link.href = URL.createObjectURL(new Blob([output], { type: "application/octet-stream" }), null);
-      link.download = filename;
-      document.body.append(link);
-      //link.click();
-      link.remove();
+        function appendLog(text, type = '') {
+          const line = document.createElement('div');
+          line.className = `terminal-line ${type}`;
+          line.textContent = text;
+          terminalOutput.appendChild(line);
+          terminalOutput.scrollTop = terminalOutput.scrollHeight;
+        }
+
+        clearBtn.addEventListener('click', () => {
+          terminalOutput.innerHTML = '';
+          appendLog('Console cleared.', 'info');
+        });
+
+        appendLog('Pre-loading OpenSCAD WebAssembly module...', 'info');
+        try {
+          // Instantiate a dummy instance just to trigger download/caching of WASM binary
+          await OpenSCAD({ noInitialRun: true });
+          appendLog('OpenSCAD WASM Module pre-loaded and cached successfully.', 'success');
+        } catch (e) {
+          appendLog('Failed to pre-load OpenSCAD WASM: ' + e.message, 'error');
+          statusDot.className = 'status-indicator';
+          statusDot.style.backgroundColor = 'var(--error-color)';
+          statusDot.style.boxShadow = '0 0 8px var(--error-color)';
+          statusText.textContent = 'Failed to load';
+          renderBtn.disabled = true;
+          return;
+        }
+
+        renderBtn.addEventListener('click', async () => {
+          renderBtn.disabled = true;
+          statusDot.className = 'status-indicator busy';
+          statusText.textContent = 'Rendering...';
+          appendLog('Initializing fresh OpenSCAD instance...', 'info');
+
+          // Yield execution to allow UI updates
+          await new Promise(r => setTimeout(r, 50));
+
+          try {
+            // Instantiate a fresh OpenSCAD instance on each run
+            const instance = await OpenSCAD({
+              noInitialRun: true,
+              print: function(text) {
+                appendLog(text);
+              },
+              printErr: function(text) {
+                appendLog(text, 'warning');
+              },
+              ENV: {
+                FONTCONFIG_FILE: "/fonts/fonts.conf",
+                FONTCONFIG_PATH: "/fonts"
+              }
+            });
+
+            // Add fonts to the FS
+            addFonts(instance);
+
+            // Add MCAD library to the FS
+            addMCAD(instance);
+
+            // Create locale directory to avoid localization warning
+            instance.FS.mkdir("/locale");
+
+            const filename = "cube.stl";
+            const code = editor.getValue();
+
+            // Write the current editor script to the virtual FS
+            instance.FS.writeFile("/input.scad", code);
+
+            appendLog('Compiling & rendering model...', 'info');
+            // Execute main
+            instance.callMain(["/input.scad", "--backend=Manifold", "-o", filename]);
+
+            // Read output
+            const output = instance.FS.readFile("/" + filename);
+
+            // Trigger download
+            const blob = new Blob([output], { type: "application/octet-stream" });
+            const link = document.createElement("a");
+            link.href = URL.createObjectURL(blob);
+            link.download = filename;
+            document.body.append(link);
+            link.click();
+            link.remove();
+
+            appendLog('Model rendered and download started successfully!', 'success');
+          } catch (err) {
+            appendLog('Compilation failed: ' + (err.message ? err.message : err), 'error');
+          } finally {
+            renderBtn.disabled = false;
+            statusDot.className = 'status-indicator';
+            statusText.textContent = 'Ready';
+          }
+        });
+      });
     </script>
-  </head>
+  </body>
 </html>
