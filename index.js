@@ -70,6 +70,80 @@ require(['vs/editor/editor.main'], async function () {
     }
   });
 
+  // Register OpenSCAD completion provider for language hints
+  monaco.languages.registerCompletionItemProvider('openscad', {
+    provideCompletionItems: function (model, position) {
+      const suggestions = [];
+
+      const keywords = [
+        'module', 'function', 'use', 'include', 'for', 'intersection', 
+        'difference', 'union', 'if', 'else', 'let', 'each', 'true', 'false'
+      ];
+      keywords.forEach(kw => {
+        suggestions.push({
+          label: kw,
+          kind: monaco.languages.CompletionItemKind.Keyword,
+          insertText: kw
+        });
+      });
+
+      const builtins = [
+        'cube', 'sphere', 'cylinder', 'polyhedron', 'square', 'circle', 
+        'polygon', 'text', 'linear_extrude', 'rotate_extrude', 'rotate', 
+        'translate', 'scale', 'resize', 'mirror', 'multmatrix', 'color', 
+        'offset', 'hull', 'minkowski', 'echo', 'version', 'version_num'
+      ];
+      builtins.forEach(bi => {
+        let insertText = bi;
+        let kind = monaco.languages.CompletionItemKind.Function;
+        
+        if (bi === 'cube') {
+          insertText = 'cube(size = [${1:10}, ${2:10}, ${3:10}], center = ${4:true});';
+          kind = monaco.languages.CompletionItemKind.Snippet;
+        } else if (bi === 'sphere') {
+          insertText = 'sphere(r = ${1:10}, $fn = ${2:50});';
+          kind = monaco.languages.CompletionItemKind.Snippet;
+        } else if (bi === 'cylinder') {
+          insertText = 'cylinder(h = ${1:20}, r = ${2:5}, center = ${3:true}, $fn = ${4:50});';
+          kind = monaco.languages.CompletionItemKind.Snippet;
+        } else if (bi === 'translate') {
+          insertText = 'translate([${1:0}, ${2:0}, ${3:0}]) {\n\t$0\n}';
+          kind = monaco.languages.CompletionItemKind.Snippet;
+        } else if (bi === 'rotate') {
+          insertText = 'rotate([${1:0}, ${2:0}, ${3:0}]) {\n\t$0\n}';
+          kind = monaco.languages.CompletionItemKind.Snippet;
+        } else if (bi === 'scale') {
+          insertText = 'scale([${1:1}, ${2:1}, ${3:1}]) {\n\t$0\n}';
+          kind = monaco.languages.CompletionItemKind.Snippet;
+        } else if (bi === 'difference') {
+          insertText = 'difference() {\n\t$1\n\t$2\n}';
+          kind = monaco.languages.CompletionItemKind.Snippet;
+        } else if (bi === 'union') {
+          insertText = 'union() {\n\t$1\n\t$2\n}';
+          kind = monaco.languages.CompletionItemKind.Snippet;
+        } else if (bi === 'intersection') {
+          insertText = 'intersection() {\n\t$1\n\t$2\n}';
+          kind = monaco.languages.CompletionItemKind.Snippet;
+        } else if (bi === 'module') {
+          insertText = 'module ${1:name}(${2:params}) {\n\t$0\n}';
+          kind = monaco.languages.CompletionItemKind.Snippet;
+        } else {
+          insertText = bi + '($0)';
+        }
+
+        suggestions.push({
+          label: bi,
+          kind: kind,
+          insertText: insertText,
+          insertTextRules: insertText.includes('$') ? monaco.languages.CompletionItemInsertTextRule.InsertAsSnippet : undefined,
+          documentation: `OpenSCAD built-in: ${bi}`
+        });
+      });
+
+      return { suggestions: suggestions };
+    }
+  });
+
   const initialCode = `module testshape()
 {
   function r_from_dia(d) = d / 2;
