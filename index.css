@@ -211,6 +211,7 @@ body {
 /* 3D Viewport Panel */
 .viewport-panel {
   flex: 1;
+  min-height: 0;
   display: flex;
   flex-direction: column;
   position: relative;
@@ -219,11 +220,18 @@ body {
 }
 
 #viewport-container {
-  flex: 1;
+  position: absolute;
+  top: 0;
+  left: 0;
   width: 100%;
   height: 100%;
   outline: none;
   cursor: grab;
+  overflow: hidden;
+}
+
+#viewport-container canvas {
+  display: block;
 }
 
 #viewport-container:active {

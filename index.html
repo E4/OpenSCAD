@@ -33,7 +33,13 @@
     <div class="workspace-container">
       <section class="editor-panel">
         <header class="panel-header">
-          <span class="panel-title">Editor (input.scad)</span>
+          <span class="panel-title">Editor</span>
+          <div class="file-controls" style="display: flex; gap: 8px; align-items: center;">
+            <span id="save-status" style="font-size: 0.75rem; color: var(--text-muted); min-width: 60px; text-align: right; font-style: italic;"></span>
+            <select id="file-select" class="style-select" style="padding: 4px 8px; font-size: 0.8rem; width: 140px; height: 28px; margin: 0;"></select>
+            <button id="new-file-btn" class="terminal-btn" style="padding: 4px 8px; font-size: 0.8rem; height: 28px; margin: 0;">New</button>
+            <button id="delete-file-btn" class="terminal-btn" style="padding: 4px 8px; font-size: 0.8rem; height: 28px; margin: 0; color: var(--error-color); border-color: rgba(255, 23, 68, 0.3);">Delete</button>
+          </div>
         </header>
         <div id="editor-container"></div>
       </section>
@@ -62,6 +68,10 @@
             <div class="checkbox-container">
               <input type="checkbox" id="grid-toggle" checked>
               <label for="grid-toggle">Grid</label>
+            </div>
+            <div class="checkbox-container">
+              <input type="checkbox" id="auto-render-toggle">
+              <label for="auto-render-toggle">Auto-Render</label>
             </div>
           </div>
         </div>
@@ -227,6 +237,154 @@ testshape();
         clearBtn.addEventListener('click', () => {
           terminalOutput.innerHTML = '';
           appendLog('Console cleared.', 'info');
+        });
+
+        let isSwitchingFile = false;
+
+        function saveCurrentFile() {
+          const activeFile = localStorage.getItem("openscad_active_file") || "testShape";
+          const code = editor.getValue();
+          let files = JSON.parse(localStorage.getItem("openscad_files") || "{}");
+          files[activeFile] = code;
+          localStorage.setItem("openscad_files", JSON.stringify(files));
+        }
+
+        function updateFileSelectOptions() {
+          const fileSelect = document.getElementById('file-select');
+          fileSelect.innerHTML = '';
+          const files = JSON.parse(localStorage.getItem("openscad_files") || "{}");
+          const activeFile = localStorage.getItem("openscad_active_file") || "testShape";
+          
+          for (const name in files) {
+            const option = document.createElement('option');
+            option.value = name;
+            option.textContent = name;
+            if (name === activeFile) {
+              option.selected = true;
+            }
+            fileSelect.appendChild(option);
+          }
+        }
+
+        // Initialize files in localStorage if not present
+        let localFiles = JSON.parse(localStorage.getItem("openscad_files") || "{}");
+        if (!localFiles["testShape"]) {
+          localFiles["testShape"] = initialCode;
+          localStorage.setItem("openscad_files", JSON.stringify(localFiles));
+        }
+        let activeFile = localStorage.getItem("openscad_active_file") || "testShape";
+        if (!localFiles[activeFile]) {
+          activeFile = "testShape";
+          localStorage.setItem("openscad_active_file", "testShape");
+        }
+
+        updateFileSelectOptions();
+
+        isSwitchingFile = true;
+        editor.setValue(localFiles[activeFile]);
+        isSwitchingFile = false;
+
+        // File selection dropdown handler
+        document.getElementById('file-select').addEventListener('change', (e) => {
+          saveCurrentFile();
+          
+          const newActiveFile = e.target.value;
+          localStorage.setItem("openscad_active_file", newActiveFile);
+          
+          const files = JSON.parse(localStorage.getItem("openscad_files") || "{}");
+          isSwitchingFile = true;
+          editor.setValue(files[newActiveFile] || "");
+          isSwitchingFile = false;
+          
+          document.getElementById('save-status').textContent = '';
+        });
+
+        // New File handler
+        const newFileBtn = document.getElementById('new-file-btn');
+        newFileBtn.addEventListener('click', () => {
+          saveCurrentFile();
+
+          let defaultName = "untitled";
+          let files = JSON.parse(localStorage.getItem("openscad_files") || "{}");
+          if (files[defaultName] !== undefined) {
+            let counter = 1;
+            while (files["untitled" + counter] !== undefined) {
+              counter++;
+            }
+            defaultName = "untitled" + counter;
+          }
+          
+          const name = prompt("Enter file name:", defaultName);
+          if (name === null) return;
+          const trimmedName = name.trim();
+          if (!trimmedName) {
+            alert("File name cannot be empty.");
+            return;
+          }
+          
+          if (files[trimmedName] !== undefined) {
+            alert("A file with this name already exists.");
+            return;
+          }
+          
+          files[trimmedName] = "";
+          localStorage.setItem("openscad_files", JSON.stringify(files));
+          localStorage.setItem("openscad_active_file", trimmedName);
+          
+          updateFileSelectOptions();
+          
+          isSwitchingFile = true;
+          editor.setValue("");
+          isSwitchingFile = false;
+          
+          document.getElementById('save-status').textContent = '';
+          appendLog(`Created new file "${trimmedName}"`, 'info');
+        });
+
+        // Delete File handler
+        const deleteFileBtn = document.getElementById('delete-file-btn');
+        deleteFileBtn.addEventListener('click', () => {
+          const activeFile = localStorage.getItem("openscad_active_file") || "testShape";
+          if (activeFile === "testShape") {
+            alert("Cannot delete the default template shape.");
+            return;
+          }
+          
+          if (!confirm(`Are you sure you want to delete "${activeFile}"?`)) return;
+          
+          let files = JSON.parse(localStorage.getItem("openscad_files") || "{}");
+          delete files[activeFile];
+          
+          localStorage.setItem("openscad_files", JSON.stringify(files));
+          localStorage.setItem("openscad_active_file", "testShape");
+          
+          updateFileSelectOptions();
+          
+          isSwitchingFile = true;
+          editor.setValue(files["testShape"] || initialCode);
+          isSwitchingFile = false;
+          
+          document.getElementById('save-status').textContent = '';
+          appendLog(`Deleted "${activeFile}"`, 'info');
+        });
+
+        // Debounced editor change listener (Auto-Save & Auto-Render)
+        let changeTimeout = null;
+        editor.onDidChangeModelContent(() => {
+          if (isSwitchingFile) return;
+          
+          document.getElementById('save-status').textContent = 'Saving...';
+          
+          if (changeTimeout) clearTimeout(changeTimeout);
+          
+          changeTimeout = setTimeout(() => {
+            saveCurrentFile();
+            document.getElementById('save-status').textContent = 'Saved';
+            
+            if (document.getElementById('auto-render-toggle').checked) {
+              renderModel();
+            }
+          }, 1000);
         });
 
         // --- ThreeJS 3D Viewport Setup ---
@@ -501,8 +659,9 @@ testshape();
           return;
         }
 
-        // --- Render Click Handler ---
-        renderBtn.addEventListener('click', async () => {
+        // --- Render function and handlers ---
+        async function renderModel() {
+          if (renderBtn.disabled) return;
           renderBtn.disabled = true;
           downloadBtn.disabled = true;
           statusDot.className = 'status-indicator busy';
@@ -566,7 +725,9 @@ testshape();
             statusDot.className = 'status-indicator';
             statusText.textContent = 'Ready';
           }
-        });
+        }
+
+        renderBtn.addEventListener('click', renderModel);
 
         // --- Download Click Handler ---
         downloadBtn.addEventListener('click', () => {
