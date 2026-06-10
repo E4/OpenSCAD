@@ -405,19 +405,25 @@ body {
 
 .checkbox-container input[type="checkbox"] {
   appearance: none;
+  -webkit-appearance: none;
   background-color: rgba(255, 255, 255, 0.05);
   border: 1px solid var(--panel-border);
-  padding: 8px;
+  width: 16px;
+  height: 16px;
   border-radius: 4px;
-  display: inline-block;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
   position: relative;
   cursor: pointer;
   outline: none;
   transition: all 0.2s;
+  flex-shrink: 0;
 }
 
 .checkbox-container input[type="checkbox"]:hover {
   background-color: rgba(255, 255, 255, 0.08);
+  border-color: rgba(0, 240, 255, 0.5);
 }
 
 .checkbox-container input[type="checkbox"]:checked {
@@ -426,13 +432,23 @@ body {
   box-shadow: 0 0 8px rgba(0, 240, 255, 0.4);
 }
 
-.checkbox-container input[type="checkbox"]:checked:after {
-  content: '\2714';
-  font-size: 10px;
+.checkbox-container input[type="checkbox"]::after {
+  content: "";
   position: absolute;
-  top: 1px;
-  left: 3px;
-  color: #000;
+  opacity: 0;
+  transform: scale(0) rotate(45deg);
+  transition: all 0.2s cubic-bezier(0.12, 0.4, 0.29, 1.46);
+  left: 5px;
+  top: 2px;
+  width: 4px;
+  height: 7px;
+  border: solid #0b0c10;
+  border-width: 0 2px 2px 0;
+}
+
+.checkbox-container input[type="checkbox"]:checked::after {
+  opacity: 1;
+  transform: scale(1) rotate(45deg);
 }
 
 .checkbox-container label {
@@ -520,18 +536,77 @@ body {
     display: contents; /* unwrap child panels to be direct grid items */
   }
 
-  .controls-section {
+  /* Make controls section extremely compact on mobile and merge to same line */
+  .workspace-container .controls-section {
     grid-row: 1;
     width: 100%;
     border-bottom: 1px solid var(--panel-border);
-    padding: 12px 16px;
+    padding: 6px 12px;
     height: auto;
+    display: flex;
+    flex-direction: row;
+    flex-wrap: wrap;
+    gap: 8px;
+    align-items: center;
+    justify-content: flex-start;
   }
 
-  .options-row {
-    flex-wrap: wrap;
-    gap: 12px;
-    align-items: center;
+  .workspace-container .buttons-row,
+  .workspace-container .options-row {
+    display: contents;
+  }
+
+  .workspace-container .render-btn,
+  .workspace-container .download-btn {
+    padding: 2px 6px;
+    height: 28px;
+    font-size: 16px;
+    font-weight: 500;
+    flex: none;
+    gap: 4px;
+    transform: none;
+  }
+
+  .workspace-container .render-btn:hover:not(:disabled),
+  .workspace-container .download-btn:hover:not(:disabled),
+  .workspace-container .render-btn:active,
+  .workspace-container .download-btn:active:not(:disabled) {
+    transform: none;
+  }
+
+  .workspace-container .render-btn svg,
+  .workspace-container .download-btn svg {
+    width: 12px;
+    height: 12px;
+  }
+
+  .workspace-container .style-select-container {
+    gap: 4px;
+  }
+
+  .workspace-container .style-select-container label {
+    display: none;
+  }
+
+  .workspace-container .style-select {
+    padding: 2px 6px;
+    font-size: 16px; /* Prevent zoom */
+    height: 28px;
+  }
+
+  .workspace-container .checkbox-container {
+    height: 28px;
+    gap: 4px;
+  }
+
+  .workspace-container .checkbox-container input[type="checkbox"] {
+    width: 16px;
+    height: 16px;
+  }
+
+  .workspace-container .checkbox-container label {
+    font-size: 0.7rem;
+    letter-spacing: 0;
   }
 
   .viewport-panel {
@@ -545,7 +620,6 @@ body {
   .editor-panel {
     grid-row: 3;
     width: 100%;
-    min-width: 0 !important;
     height: 100%;
     min-height: 0;
     border-left: none;
@@ -560,12 +634,8 @@ body {
     border-top: none;
   }
 
-  /* Prevent automatic zoom-on-focus in Monaco Editor and select/button controls on mobile */
-  .monaco-editor textarea,
-  .style-select,
-  .terminal-btn,
-  .render-btn,
-  .download-btn {
-    font-size: 16px !important;
+  /* Prevent automatic zoom-on-focus for buttons and actions */
+  .workspace-container .terminal-btn {
+    font-size: 16px;
   }
 }

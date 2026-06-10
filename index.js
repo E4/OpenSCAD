@@ -182,13 +182,16 @@ echo(version=version());
 demoshape();
 `;
 
+  const isMobile = window.innerWidth <= 768;
+  const editorFontSize = isMobile ? 16 : 14;
+
   const editor = monaco.editor.create(document.getElementById('editor-container'), {
     value: initialCode,
     language: 'openscad',
     theme: 'vs-dark',
     automaticLayout: true,
     fontFamily: 'Fira Code, monospace',
-    fontSize: 14,
+    fontSize: editorFontSize,
     lineHeight: 22,
     minimap: { enabled: false },
     scrollbar: {
