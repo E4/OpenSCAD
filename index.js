@@ -355,7 +355,18 @@ demoshape();
   deleteFileBtn.addEventListener('click', () => {
     const activeFile = localStorage.getItem("openscad_active_file") || "Demo Shape";
     if (activeFile === "Demo Shape") {
-      alert("Cannot delete the default template shape.");
+      if (!confirm(`Are you sure you want to restore "Demo Shape" to its original template?`)) return;
+      
+      let files = JSON.parse(localStorage.getItem("openscad_files") || "{}");
+      files["Demo Shape"] = initialCode;
+      localStorage.setItem("openscad_files", JSON.stringify(files));
+      
+      isSwitchingFile = true;
+      editor.setValue(initialCode);
+      isSwitchingFile = false;
+      
+      appendLog(`Restored "Demo Shape" to original template`, 'info');
+      renderModel();
       return;
     }
     
@@ -374,6 +385,7 @@ demoshape();
     isSwitchingFile = false;
     
     appendLog(`Deleted "${activeFile}"`, 'info');
+    renderModel();
   });
 
   // Debounced editor change listener (Auto-Save & Auto-Render)
