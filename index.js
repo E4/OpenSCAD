@@ -1,6 +1,7 @@
 import * as THREE from 'three';
 import { STLLoader } from 'three/addons/loaders/STLLoader.js';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+import { ThreeMFLoader } from 'three/addons/loaders/3MFLoader.js';
 
 // Configure Monaco Editor AMD Loader
 require.config({ paths: { vs: 'https://cdnjs.cloudflare.com/ajax/libs/monaco-editor/0.39.0/min/vs' } });
@@ -156,16 +157,16 @@ module demoshape()
   }
 
   difference() {
-    sphere(r = r_from_dia(size));
-    rotcy([0, 0, 0], cy_r, cy_h);
-    rotcy([1, 0, 0], cy_r, cy_h);
-    rotcy([0, 1, 0], cy_r, cy_h);
+    color("orchid") sphere(r = r_from_dia(size));
+    color("teal") rotcy([0, 0, 0], cy_r, cy_h);
+    color("teal") rotcy([1, 0, 0], cy_r, cy_h);
+    color("teal") rotcy([0, 1, 0], cy_r, cy_h);
     for (x_idx = [0 : 1]) {
       for (y_idx = [0 : 3]) {
         rotate([-45+x_idx*90, y_idx * 90, 0])
           translate([0, 0 , 24])
             linear_extrude(1)
-              text(str((x_idx * 4) + y_idx + 1), halign="center", valign="center");
+              color("gold") text(str((x_idx * 4) + y_idx + 1), halign="center", valign="center");
       }
     }
   }
@@ -203,6 +204,7 @@ demoshape();
   // Initialize UI & ThreeJS variables
   const renderBtn = document.getElementById('render-btn');
   const downloadBtn = document.getElementById('download-btn');
+  const download3mfBtn = document.getElementById('download-3mf-btn');
   const terminalOutput = document.getElementById('terminal-output');
   const clearBtn = document.getElementById('clear-terminal');
   const statusDot = document.getElementById('status-dot');
@@ -233,6 +235,7 @@ demoshape();
   }
 
   let lastRenderedSTL = null; // Buffer to hold rendered STL data
+  let lastRendered3MF = null; // Buffer to hold rendered 3MF data
 
   function appendLog(text, type = '') {
     const line = document.createElement('div');
@@ -275,9 +278,9 @@ demoshape();
     }
   }
 
-  // Initialize files in localStorage if not present
+  // Initialize files in localStorage if not present or if it's the old version without colors
   let localFiles = JSON.parse(localStorage.getItem("openscad_files") || "{}");
-  if (!localFiles["Demo Shape"]) {
+  if (!localFiles["Demo Shape"] || !localFiles["Demo Shape"].includes('color("orchid")')) {
     localFiles["Demo Shape"] = initialCode;
     localStorage.setItem("openscad_files", JSON.stringify(localFiles));
   }
@@ -594,42 +597,72 @@ demoshape();
 
   function updateMeshMaterial(style) {
     if (!currentMesh) return;
-    const mesh = currentMesh.children[0];
-    if (!mesh) return;
-    mesh.material = getSelectedMaterial();
+    currentMesh.traverse((child) => {
+      if (child.isMesh) {
+        if (style === 'solid') {
+          if (child.userData.originalMaterial) {
+            child.material = child.userData.originalMaterial;
+          }
+        } else {
+          child.material = getSelectedMaterial();
+        }
+      }
+    });
     appendLog(`Viewport material updated to: ${style}`, 'info');
   }
 
-  function loadSTLIntoViewport(arrayBuffer, shouldResetCamera = true) {
+  function load3MFIntoViewport(arrayBuffer, shouldResetCamera = true) {
     if (currentMesh) {
       scene.remove(currentMesh);
     }
 
-    const loader = new STLLoader();
-    let geometry;
+    const loader = new ThreeMFLoader();
+    let group;
     try {
-      geometry = loader.parse(arrayBuffer);
+      group = loader.parse(arrayBuffer);
     } catch (e) {
-      appendLog('Three.js failed to parse STL: ' + e.message, 'error');
+      appendLog('Three.js failed to parse 3MF: ' + e.message, 'error');
       return;
     }
 
-    const material = getSelectedMaterial();
-    const mesh = new THREE.Mesh(geometry, material);
+    const style = document.getElementById('material-select').value;
+
+    group.traverse((child) => {
+      if (child.isMesh) {
+        // Cache original material from loader (with 3MF colors)
+        child.userData.originalMaterial = child.material.clone();
+        
+        // Enhance it with glossy flat shaded premium look
+        if (child.userData.originalMaterial.isMeshStandardMaterial || child.userData.originalMaterial.isMeshPhongMaterial) {
+          child.userData.originalMaterial.flatShading = true;
+          child.userData.originalMaterial.roughness = 0.35;
+          child.userData.originalMaterial.metalness = 0.15;
+          child.userData.originalMaterial.needsUpdate = true;
+        }
+
+        // Apply selected style
+        if (style === 'normals') {
+          child.material = new THREE.MeshNormalMaterial({ flatShading: true });
+        } else if (style === 'wireframe') {
+          child.material = new THREE.MeshBasicMaterial({ color: 0x00f0ff, wireframe: true });
+        } else {
+          child.material = child.userData.originalMaterial;
+        }
+      }
+    });
 
     // Compute boundaries and auto-center
-    geometry.computeBoundingBox();
-    const boundingBox = geometry.boundingBox;
+    const boundingBox = new THREE.Box3().setFromObject(group);
     const center = new THREE.Vector3();
     boundingBox.getCenter(center);
 
-    // Offset the geometry to align the bounding box center with the origin
-    mesh.position.set(-center.x, -center.y, -center.z);
+    // Offset the group to align the bounding box center with the origin
+    group.position.set(-center.x, -center.y, -center.z);
 
-    const group = new THREE.Group();
-    group.add(mesh);
-    scene.add(group);
-    currentMesh = group;
+    const containerGroup = new THREE.Group();
+    containerGroup.add(group);
+    scene.add(containerGroup);
+    currentMesh = containerGroup;
 
     if (shouldResetCamera) {
       // Adjust camera to fit the model bounding box
@@ -778,6 +811,8 @@ demoshape();
     return String(err);
   }
 
+  let currentCompilingCode = "";
+
   async function renderModel() {
     // If a worker is compiling, terminate it to cancel the current run
     if (activeWorker) {
@@ -788,6 +823,7 @@ demoshape();
 
     renderBtn.disabled = true;
     downloadBtn.disabled = true;
+    download3mfBtn.disabled = true;
     statusDot.className = 'status-indicator busy';
     statusText.textContent = 'Rendering...';
 
@@ -799,13 +835,14 @@ demoshape();
       if (msg.type === 'log') {
         appendLog(msg.text, msg.logType);
       } else if (msg.type === 'success') {
-        lastRenderedSTL = new Uint8Array(msg.buffer);
+        lastRendered3MF = new Uint8Array(msg.buffer);
+        lastRenderedSTL = null; // Reset STL cache since model has changed
         
         const activeFile = localStorage.getItem("openscad_active_file") || "Demo Shape";
         const shouldResetCamera = (lastLoadedFile !== activeFile);
         lastLoadedFile = activeFile;
 
-        loadSTLIntoViewport(msg.buffer, shouldResetCamera);
+        load3MFIntoViewport(msg.buffer, shouldResetCamera);
         appendLog('Model rendered in viewport successfully!', 'success');
         
         activeWorker.terminate();
@@ -813,6 +850,7 @@ demoshape();
 
         renderBtn.disabled = false;
         downloadBtn.disabled = false;
+        download3mfBtn.disabled = false;
         statusDot.className = 'status-indicator';
         statusText.textContent = 'Ready';
       } else if (msg.type === 'error') {
@@ -827,6 +865,7 @@ demoshape();
 
         renderBtn.disabled = false;
         downloadBtn.disabled = false;
+        download3mfBtn.disabled = false;
         statusDot.className = 'status-indicator';
         statusText.textContent = 'Ready';
       }
@@ -841,31 +880,100 @@ demoshape();
 
       renderBtn.disabled = false;
       downloadBtn.disabled = false;
+      download3mfBtn.disabled = false;
       statusDot.className = 'status-indicator';
       statusText.textContent = 'Ready';
     };
 
     const code = editor.getValue();
-    activeWorker.postMessage({ type: 'compile', code: code });
+    currentCompilingCode = code;
+    activeWorker.postMessage({ type: 'compile', code: code, format: '3mf' });
   }
 
   renderBtn.addEventListener('click', renderModel);
 
-  // --- Download Click Handler ---
-  downloadBtn.addEventListener('click', () => {
-    if (!lastRenderedSTL) return;
-    
+  // Helper function to trigger browser file download
+  function triggerDownload(buffer, filename) {
     try {
-      const blob = new Blob([lastRenderedSTL], { type: "application/octet-stream" });
+      const blob = new Blob([buffer], { type: "application/octet-stream" });
       const link = document.createElement("a");
       link.href = URL.createObjectURL(blob);
-      link.download = "model.stl";
+      link.download = filename;
       document.body.append(link);
       link.click();
       link.remove();
-      appendLog('STL file downloaded successfully.', 'success');
+      appendLog(`${filename.toUpperCase()} downloaded successfully.`, 'success');
     } catch (e) {
       appendLog('Download failed: ' + e.message, 'error');
+    }
+  }
+
+  // --- Download STL Click Handler ---
+  downloadBtn.addEventListener('click', () => {
+    if (lastRenderedSTL) {
+      triggerDownload(lastRenderedSTL, "model.stl");
+      return;
+    }
+
+    if (activeWorker) {
+      alert("Please wait for the current compilation to finish.");
+      return;
+    }
+
+    renderBtn.disabled = true;
+    downloadBtn.disabled = true;
+    download3mfBtn.disabled = true;
+    statusDot.className = 'status-indicator busy';
+    statusText.textContent = 'Exporting STL...';
+
+    activeWorker = new Worker('./openscad-worker.js', { type: 'module' });
+    activeWorker.onmessage = function(e) {
+      const msg = e.data;
+      if (msg.type === 'log') {
+        appendLog(msg.text, msg.logType);
+      } else if (msg.type === 'success') {
+        lastRenderedSTL = new Uint8Array(msg.buffer);
+        triggerDownload(lastRenderedSTL, "model.stl");
+
+        activeWorker.terminate();
+        activeWorker = null;
+
+        renderBtn.disabled = false;
+        downloadBtn.disabled = false;
+        download3mfBtn.disabled = false;
+        statusDot.className = 'status-indicator';
+        statusText.textContent = 'Ready';
+      } else if (msg.type === 'error') {
+        appendLog('STL export failed: ' + msg.message, 'error');
+        activeWorker.terminate();
+        activeWorker = null;
+        renderBtn.disabled = false;
+        downloadBtn.disabled = false;
+        download3mfBtn.disabled = false;
+        statusDot.className = 'status-indicator';
+        statusText.textContent = 'Ready';
+      }
+    };
+
+    activeWorker.onerror = function(err) {
+      const errorMsg = formatWorkerError(err);
+      appendLog('STL export error: ' + errorMsg, 'error');
+      activeWorker.terminate();
+      activeWorker = null;
+      renderBtn.disabled = false;
+      downloadBtn.disabled = false;
+      download3mfBtn.disabled = false;
+      statusDot.className = 'status-indicator';
+      statusText.textContent = 'Ready';
+    };
+
+    activeWorker.postMessage({ type: 'compile', code: currentCompilingCode, format: 'stl' });
+  });
+
+  // --- Download 3MF Click Handler ---
+  download3mfBtn.addEventListener('click', () => {
+    if (lastRendered3MF) {
+      triggerDownload(lastRendered3MF, "model.3mf");
     }
   });
 

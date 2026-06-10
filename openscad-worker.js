@@ -64,7 +64,9 @@ function safeDump(obj, depth = 3) {
 
 self.onmessage = async function(e) {
   if (e.data.type === 'compile') {
-    const { code } = e.data;
+    const { code, format } = e.data;
+    const outFormat = format || '3mf';
+    const filename = `output.${outFormat}`;
     
     try {
       // Instantiate a fresh OpenSCAD instance inside the worker
@@ -89,19 +91,20 @@ self.onmessage = async function(e) {
       // Create locale directory to avoid localization warning
       instance.FS.mkdir("/locale");
       
-      const filename = "output.stl";
       instance.FS.writeFile("/input.scad", code);
 
-      self.postMessage({ type: 'log', text: 'Compiling & rendering model...', logType: 'info' });
+      self.postMessage({ type: 'log', text: `Compiling model to ${outFormat.toUpperCase()}...`, logType: 'info' });
 
-      // Execute main compilation
+      // Execute compilation
       instance.callMain(["/input.scad", "--backend=Manifold", "-o", filename]);
-
-      // Read output STL from the virtual FS
       const output = instance.FS.readFile("/" + filename);
       
       // Post success and transfer the array buffer to avoid copying overhead
-      self.postMessage({ type: 'success', buffer: output.buffer }, [output.buffer]);
+      self.postMessage({
+        type: 'success',
+        format: outFormat,
+        buffer: output.buffer
+      }, [output.buffer]);
     } catch (err) {
       let errMsg;
       if (err && typeof err === 'object') {
