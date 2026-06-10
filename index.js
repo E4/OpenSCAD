@@ -242,6 +242,13 @@ demoshape();
   let lastRendered3MF = null; // Buffer to hold rendered 3MF data
 
   function appendLog(text, type = '') {
+    // Also print to browser devtools console (use error for errors, log for everything else)
+    if (type === 'error') {
+      console.error(text);
+    } else {
+      console.log(text);
+    }
+
     const container = document.getElementById('viewport-log-container');
     if (!container) return;
 
@@ -251,7 +258,7 @@ demoshape();
     
     container.appendChild(logDiv);
     
-    // Automatically fade out after 1 second
+    // Automatically fade out after 2 seconds
     setTimeout(() => {
       logDiv.classList.add('fade-out');
       
@@ -263,7 +270,7 @@ demoshape();
       setTimeout(() => {
         logDiv.remove();
       }, 1100);
-    }, 1000);
+    }, 2000);
   }
 
   let isSwitchingFile = false;
@@ -367,6 +374,57 @@ demoshape();
     isSwitchingFile = false;
     
     appendLog(`Created new file "${trimmedName}"`, 'info');
+  });
+
+  // Rename File handler
+  const renameFileBtn = document.getElementById('rename-file-btn');
+  renameFileBtn.addEventListener('click', () => {
+    const activeFile = localStorage.getItem("openscad_active_file") || "Demo Shape";
+    const name = prompt("Enter new file name:", activeFile);
+    if (name === null) return;
+    
+    const trimmedName = name.trim();
+    if (!trimmedName) {
+      alert("File name cannot be empty.");
+      return;
+    }
+    
+    if (trimmedName === activeFile) {
+      return;
+    }
+    
+    let files = JSON.parse(localStorage.getItem("openscad_files") || "{}");
+    if (files[trimmedName] !== undefined) {
+      alert("A file with this name already exists.");
+      return;
+    }
+    
+    const currentCode = editor.getValue();
+    
+    if (activeFile === "Demo Shape") {
+      // Create new file with current code
+      files[trimmedName] = currentCode;
+      // Recreate Demo Shape with initial default value
+      files["Demo Shape"] = initialCode;
+      
+      localStorage.setItem("openscad_files", JSON.stringify(files));
+      localStorage.setItem("openscad_active_file", trimmedName);
+      
+      updateFileSelectOptions();
+      
+      appendLog(`Renamed default "Demo Shape" to "${trimmedName}" and recreated original "Demo Shape" template`, 'info');
+    } else {
+      // Regular rename: copy content and delete old entry
+      files[trimmedName] = currentCode;
+      delete files[activeFile];
+      
+      localStorage.setItem("openscad_files", JSON.stringify(files));
+      localStorage.setItem("openscad_active_file", trimmedName);
+      
+      updateFileSelectOptions();
+      
+      appendLog(`Renamed "${activeFile}" to "${trimmedName}"`, 'info');
+    }
   });
 
   // Delete File handler

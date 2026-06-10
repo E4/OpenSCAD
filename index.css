@@ -508,7 +508,7 @@ body {
   background: rgba(255, 255, 255, 0.05);
 }
 
-#new-file-btn, #delete-file-btn {
+#new-file-btn, #rename-file-btn, #delete-file-btn {
   padding: 4px 8px;
   font-size: 0.8rem;
   height: 28px;
