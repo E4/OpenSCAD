@@ -157,16 +157,17 @@ module demoshape()
   }
 
   difference() {
-    color("orchid") sphere(r = r_from_dia(size));
-    color("teal") rotcy([0, 0, 0], cy_r, cy_h);
-    color("teal") rotcy([1, 0, 0], cy_r, cy_h);
-    color("teal") rotcy([0, 1, 0], cy_r, cy_h);
+    color("red") sphere(r = r_from_dia(size));
+    color("orange") rotcy([0, 0, 0], cy_r, cy_h);
+    color("orange") rotcy([1, 0, 0], cy_r, cy_h);
+    color("orange") rotcy([0, 1, 0], cy_r, cy_h);
     for (x_idx = [0 : 1]) {
       for (y_idx = [0 : 3]) {
-        rotate([-45+x_idx*90, y_idx * 90, 0])
-          translate([0, 0 , 24])
-            linear_extrude(1)
-              color("gold") text(str((x_idx * 4) + y_idx + 1), halign="center", valign="center");
+        color("gold") 
+          rotate([-45+x_idx*90, y_idx * 90, 0])
+            translate([0, 0 , 24])
+              linear_extrude(1)
+                text(str((x_idx * 4) + y_idx + 1), halign="center", valign="center");
       }
     }
   }
@@ -201,12 +202,15 @@ demoshape();
     }
   });
 
+  // Re-measure font widths once Fira Code has finished loading to prevent cursor alignment drift
+  document.fonts.ready.then(() => {
+    monaco.editor.remeasureFonts();
+  });
+
   // Initialize UI & ThreeJS variables
   const renderBtn = document.getElementById('render-btn');
   const downloadBtn = document.getElementById('download-btn');
   const download3mfBtn = document.getElementById('download-3mf-btn');
-  const terminalOutput = document.getElementById('terminal-output');
-  const clearBtn = document.getElementById('clear-terminal');
   const statusDot = document.getElementById('status-dot');
   const statusText = document.getElementById('status-text');
 
@@ -238,17 +242,29 @@ demoshape();
   let lastRendered3MF = null; // Buffer to hold rendered 3MF data
 
   function appendLog(text, type = '') {
-    const line = document.createElement('div');
-    line.className = `terminal-line ${type}`;
-    line.textContent = text;
-    terminalOutput.appendChild(line);
-    terminalOutput.scrollTop = terminalOutput.scrollHeight;
-  }
+    const container = document.getElementById('viewport-log-container');
+    if (!container) return;
 
-  clearBtn.addEventListener('click', () => {
-    terminalOutput.innerHTML = '';
-    appendLog('Console cleared.', 'info');
-  });
+    const logDiv = document.createElement('div');
+    logDiv.className = `viewport-log-item ${type}`;
+    logDiv.textContent = text;
+    
+    container.appendChild(logDiv);
+    
+    // Automatically fade out after 1 second
+    setTimeout(() => {
+      logDiv.classList.add('fade-out');
+      
+      // Remove element after transition completes
+      logDiv.addEventListener('transitionend', () => {
+        logDiv.remove();
+      });
+      // Fallback removal in case transitionend doesn't fire
+      setTimeout(() => {
+        logDiv.remove();
+      }, 1100);
+    }, 1000);
+  }
 
   let isSwitchingFile = false;
   let lastLoadedFile = null;
@@ -278,9 +294,9 @@ demoshape();
     }
   }
 
-  // Initialize files in localStorage if not present or if it's the old version without colors
+  // Initialize files in localStorage if not present or if it's the old version without the red color directive
   let localFiles = JSON.parse(localStorage.getItem("openscad_files") || "{}");
-  if (!localFiles["Demo Shape"] || !localFiles["Demo Shape"].includes('color("orchid")')) {
+  if (!localFiles["Demo Shape"] || !localFiles["Demo Shape"].includes('color("red")')) {
     localFiles["Demo Shape"] = initialCode;
     localStorage.setItem("openscad_files", JSON.stringify(localFiles));
   }
@@ -976,6 +992,10 @@ demoshape();
       triggerDownload(lastRendered3MF, "model.3mf");
     }
   });
+
+  // Trigger initial welcome logs
+  appendLog('Welcome to OpenSCAD!', 'info');
+  appendLog('Click "Render" to compile and view your model.', 'info');
 
   // Trigger initial render
   renderModel();

@@ -1,5 +1,3 @@
-@import url('https://fonts.googleapis.com/css2?family=Fira+Code:wght@400;500&family=Inter:wght@400;500;600;700&display=swap');
-
 :root {
   --bg-color: #0b0c10;
   --panel-bg: rgba(22, 26, 39, 0.75);
@@ -141,8 +139,8 @@ body {
   height: 100%;
   background: var(--panel-bg);
   backdrop-filter: blur(12px);
-  display: grid;
-  grid-template-rows: auto 60fr 40fr;
+  display: flex;
+  flex-direction: column;
 }
 
 .controls-section {
@@ -196,13 +194,12 @@ body {
 
 /* 3D Viewport Panel */
 .viewport-panel {
-  height: 100%;
+  flex: 1;
   min-height: 0;
   display: flex;
   flex-direction: column;
   position: relative;
   background: #12141c;
-  border-bottom: 1px solid var(--panel-border);
 }
 
 #viewport-container {
@@ -239,81 +236,72 @@ body {
   transition: opacity 0.5s ease;
 }
 
-/* Console/Terminal Window */
-.terminal-section {
-  height: 100%;
-  min-height: 0;
+/* Viewport Overlays */
+.viewport-log-container {
+  position: absolute;
+  bottom: 24px;
+  left: 24px;
+  max-width: 450px;
   display: flex;
   flex-direction: column;
-  background-color: var(--terminal-bg);
-  border-top: 1px solid var(--panel-border);
-  position: relative;
+  gap: 2px;
+  pointer-events: none;
+  z-index: 10;
 }
 
-.terminal-header {
-  height: 40px;
-  flex-shrink: 0;
-  background: #0f111a;
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding: 0 16px;
-  border-bottom: 1px solid var(--panel-border);
-}
-
-.terminal-actions {
-  display: flex;
-  gap: 8px;
-}
-
-.terminal-btn {
+.viewport-log-item {
   background: transparent;
-  border: 1px solid var(--panel-border);
-  color: var(--text-muted);
-  font-size: 0.75rem;
-  padding: 4px 8px;
-  border-radius: 4px;
-  cursor: pointer;
-  transition: all 0.2s;
-}
-
-.terminal-btn:hover {
-  color: var(--text-main);
-  background: rgba(255, 255, 255, 0.05);
-}
-
-.terminal-output {
-  flex: 1;
+  border: none;
+  padding: 2px 0;
   font-family: 'Fira Code', 'Courier New', Courier, monospace;
-  font-size: 0.85rem;
-  line-height: 1.5;
-  padding: 16px;
-  overflow-y: auto;
+  font-size: 0.8rem;
   color: #c5cdd8;
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-}
-
-.terminal-line {
-  white-space: pre-wrap;
+  opacity: 1;
+  transition: opacity 1s cubic-bezier(0.4, 0, 0.2, 1);
   word-break: break-all;
+  white-space: pre-wrap;
+  text-shadow: 0 1px 3px rgba(0, 0, 0, 0.8);
 }
 
-.terminal-line.info {
+.viewport-log-item.info {
   color: var(--accent-cyan);
 }
 
-.terminal-line.error {
+.viewport-log-item.error {
   color: var(--error-color);
 }
 
-.terminal-line.success {
+.viewport-log-item.success {
   color: var(--success-color);
 }
 
-.terminal-line.warning {
+.viewport-log-item.warning {
   color: #ffd700;
+}
+
+.viewport-log-item.fade-out {
+  opacity: 0;
+}
+
+.viewport-status-badge {
+  position: absolute;
+  bottom: 24px;
+  right: 24px;
+  background: rgba(15, 17, 26, 0.85);
+  border: 1px solid var(--panel-border);
+  padding: 6px 12px;
+  border-radius: 6px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 0.75rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  color: var(--text-muted);
+  pointer-events: none;
+  z-index: 10;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.25);
 }
 
 /* Animations */
@@ -504,6 +492,22 @@ body {
   margin: 0;
 }
 
+.terminal-btn {
+  background: transparent;
+  border: 1px solid var(--panel-border);
+  color: var(--text-muted);
+  font-size: 0.75rem;
+  padding: 4px 8px;
+  border-radius: 4px;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.terminal-btn:hover {
+  color: var(--text-main);
+  background: rgba(255, 255, 255, 0.05);
+}
+
 #new-file-btn, #delete-file-btn {
   padding: 4px 8px;
   font-size: 0.8rem;
@@ -525,7 +529,7 @@ body {
 
   .workspace-container {
     display: grid;
-    grid-template-rows: auto 40fr 40fr 20fr;
+    grid-template-rows: auto 1fr 1fr;
     grid-template-columns: 100%;
     height: 100vh;
     width: 100%;
@@ -623,15 +627,7 @@ body {
     height: 100%;
     min-height: 0;
     border-left: none;
-    border-bottom: 1px solid var(--panel-border);
-  }
-
-  .terminal-section {
-    grid-row: 4;
-    width: 100%;
-    height: 100%;
-    min-height: 0;
-    border-top: none;
+    border-bottom: none;
   }
 
   /* Prevent automatic zoom-on-focus for buttons and actions */

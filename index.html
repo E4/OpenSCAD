@@ -5,6 +5,9 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>OpenSCAD</title>
     <meta name="description" content="An interactive, premium OpenSCAD playground in WebAssembly. Edit models in real-time, view compilation logs, and download 3D models.">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Fira+Code:wght@400;500&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="./index.css">
     
     <!-- Load Monaco Editor Loader -->
@@ -62,24 +65,10 @@
           <div class="viewport-overlay-info">Orbit: Left Click | Zoom: Scroll | Pan: Right Click</div>
           <div id="orientation-gizmo"></div>
           <div id="viewport-container"></div>
-        </div>
-
-        <div class="terminal-section">
-          <header class="terminal-header">
-            <div class="terminal-title-container">
-              <span class="panel-title">Console Output</span>
-              <div class="status-badge">
-                <div id="status-dot" class="status-indicator"></div>
-                <span id="status-text">Ready</span>
-              </div>
-            </div>
-            <div class="terminal-actions">
-              <button id="clear-terminal" class="terminal-btn">Clear</button>
-            </div>
-          </header>
-          <div id="terminal-output" class="terminal-output">
-            <div class="terminal-line info">Welcome to OpenSCAD!</div>
-            <div class="terminal-line info">Click 'Render 3D Preview' to compile and view your model.</div>
+          <div id="viewport-log-container" class="viewport-log-container"></div>
+          <div class="viewport-status-badge">
+            <div id="status-dot" class="status-indicator"></div>
+            <span id="status-text">Ready</span>
           </div>
         </div>
       </section>
