@@ -2,6 +2,7 @@ import * as THREE from 'three';
 import { STLLoader } from 'three/addons/loaders/STLLoader.js';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 import { ThreeMFLoader } from 'three/addons/loaders/3MFLoader.js';
+import JSZip from 'https://cdn.jsdelivr.net/npm/jszip@3.10.1/+esm';
 
 // Configure Monaco Editor AMD Loader
 require.config({ paths: { vs: 'https://cdnjs.cloudflare.com/ajax/libs/monaco-editor/0.39.0/min/vs' } });
@@ -145,50 +146,11 @@ require(['vs/editor/editor.main'], async function () {
     }
   });
 
-  const initialCode = `$fn=200;
-
-module demoshape()
-{
-  function r_from_dia(d) = d / 2;
-
-  module rotcy(rot, r, h) {
-    rotate(90, rot)
-      cylinder(r = r, h = h, center = true);
-  }
-
-  difference() {
-    color("red") sphere(r = r_from_dia(size));
-    color("orange") rotcy([0, 0, 0], cy_r, cy_h);
-    color("orange") rotcy([1, 0, 0], cy_r, cy_h);
-    color("orange") rotcy([0, 1, 0], cy_r, cy_h);
-    for (x_idx = [0 : 1]) {
-      for (y_idx = [0 : 3]) {
-        color("gold") 
-          rotate([-45+x_idx*90, y_idx * 90, 0])
-            translate([0, 0 , 24])
-              linear_extrude(1)
-                text(str((x_idx * 4) + y_idx + 1), halign="center", valign="center");
-      }
-    }
-  }
-
-  size = 50;
-  hole = 25;
-
-  cy_r = r_from_dia(hole);
-  cy_h = r_from_dia(size * 2.5);
-}
-
-echo(version=version());
-
-demoshape();
-`;
-
   const isMobile = window.innerWidth <= 768;
   const editorFontSize = isMobile ? 16 : 14;
 
   const editor = monaco.editor.create(document.getElementById('editor-container'), {
-    value: initialCode,
+    value: "",
     language: 'openscad',
     theme: 'vs-dark',
     automaticLayout: true,
@@ -275,49 +237,71 @@ demoshape();
 
   let isSwitchingFile = false;
   let lastLoadedFile = null;
+  const zipFiles = {};
+
+  async function loadLibsZip() {
+    try {
+      const response = await fetch('./libs.zip');
+      if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
+      const arrayBuffer = await response.arrayBuffer();
+      const zip = await JSZip.loadAsync(arrayBuffer);
+      
+      for (const [relativePath, file] of Object.entries(zip.files)) {
+        if (!file.dir) {
+          let path = relativePath;
+          if (!path.startsWith('/')) {
+            path = '/' + path;
+          }
+          path = path.replace(/\\/g, '/');
+          
+          const text = await file.async('text');
+          zipFiles[path] = text;
+        }
+      }
+    } catch (err) {
+      console.error("Failed to load libs.zip:", err);
+      appendLog("Failed to load libs.zip: " + err.message, "error");
+    }
+  }
 
   function saveCurrentFile() {
-    const activeFile = localStorage.getItem("openscad_active_file") || "Demo Shape";
+    const activeFile = localStorage.getItem("openscad_active_file") || "/DemoShape.scad";
     const code = editor.getValue();
-    let files = JSON.parse(localStorage.getItem("openscad_files") || "{}");
-    files[activeFile] = code;
-    localStorage.setItem("openscad_files", JSON.stringify(files));
+    
+    let localFiles = JSON.parse(localStorage.getItem("openscad_local_files") || "{}");
+    
+    if (zipFiles[activeFile] !== undefined && zipFiles[activeFile] === code) {
+      delete localFiles[activeFile];
+    } else {
+      localFiles[activeFile] = code;
+    }
+    
+    localStorage.setItem("openscad_local_files", JSON.stringify(localFiles));
   }
 
   function updateFileSelectOptions() {
     const fileSelect = document.getElementById('file-select');
     fileSelect.innerHTML = '';
-    const files = JSON.parse(localStorage.getItem("openscad_files") || "{}");
-    const activeFile = localStorage.getItem("openscad_active_file") || "Demo Shape";
+    const localFiles = JSON.parse(localStorage.getItem("openscad_local_files") || "{}");
     
-    for (const name in files) {
+    const allPaths = new Set([
+      ...Object.keys(zipFiles),
+      ...Object.keys(localFiles)
+    ]);
+    
+    const sortedPaths = Array.from(allPaths).sort();
+    const activeFile = localStorage.getItem("openscad_active_file") || "/DemoShape.scad";
+    
+    sortedPaths.forEach(path => {
       const option = document.createElement('option');
-      option.value = name;
-      option.textContent = name;
-      if (name === activeFile) {
+      option.value = path;
+      option.textContent = path.replace(/\.scad$/, '');
+      if (path === activeFile) {
         option.selected = true;
       }
       fileSelect.appendChild(option);
-    }
+    });
   }
-
-  // Initialize files in localStorage if not present or if it's the old version without the red color directive
-  let localFiles = JSON.parse(localStorage.getItem("openscad_files") || "{}");
-  if (!localFiles["Demo Shape"] || !localFiles["Demo Shape"].includes('color("red")')) {
-    localFiles["Demo Shape"] = initialCode;
-    localStorage.setItem("openscad_files", JSON.stringify(localFiles));
-  }
-  let activeFile = localStorage.getItem("openscad_active_file") || "Demo Shape";
-  if (!localFiles[activeFile]) {
-    activeFile = "Demo Shape";
-    localStorage.setItem("openscad_active_file", "Demo Shape");
-  }
-
-  updateFileSelectOptions();
-
-  isSwitchingFile = true;
-  editor.setValue(localFiles[activeFile]);
-  isSwitchingFile = false;
 
   // File selection dropdown handler
   document.getElementById('file-select').addEventListener('change', (e) => {
@@ -326,9 +310,11 @@ demoshape();
     const newActiveFile = e.target.value;
     localStorage.setItem("openscad_active_file", newActiveFile);
     
-    const files = JSON.parse(localStorage.getItem("openscad_files") || "{}");
+    const localFiles = JSON.parse(localStorage.getItem("openscad_local_files") || "{}");
+    const mergedFiles = { ...zipFiles, ...localFiles };
+    
     isSwitchingFile = true;
-    editor.setValue(files[newActiveFile] || "");
+    editor.setValue(mergedFiles[newActiveFile] || "");
     isSwitchingFile = false;
     
     // Trigger render when switching files
@@ -340,31 +326,41 @@ demoshape();
   newFileBtn.addEventListener('click', () => {
     saveCurrentFile();
 
-    let defaultName = "untitled";
-    let files = JSON.parse(localStorage.getItem("openscad_files") || "{}");
-    if (files[defaultName] !== undefined) {
+    let defaultName = "/Custom/untitled.scad";
+    const localFiles = JSON.parse(localStorage.getItem("openscad_local_files") || "{}");
+    const mergedFiles = { ...zipFiles, ...localFiles };
+    
+    if (mergedFiles[defaultName] !== undefined) {
       let counter = 1;
-      while (files["untitled" + counter] !== undefined) {
+      while (mergedFiles[`/Custom/untitled${counter}.scad`] !== undefined) {
         counter++;
       }
-      defaultName = "untitled" + counter;
+      defaultName = `/Custom/untitled${counter}.scad`;
     }
     
-    const name = prompt("Enter file name:", defaultName);
+    const name = prompt("Enter file name (e.g. /Custom/my_design.scad):", defaultName);
     if (name === null) return;
-    const trimmedName = name.trim();
+    let trimmedName = name.trim();
     if (!trimmedName) {
       alert("File name cannot be empty.");
       return;
     }
     
-    if (files[trimmedName] !== undefined) {
+    if (!trimmedName.startsWith('/')) {
+      trimmedName = '/' + trimmedName;
+    }
+    trimmedName = trimmedName.replace(/\\/g, '/');
+    if (!trimmedName.endsWith('.scad')) {
+      trimmedName += '.scad';
+    }
+    
+    if (mergedFiles[trimmedName] !== undefined) {
       alert("A file with this name already exists.");
       return;
     }
     
-    files[trimmedName] = "";
-    localStorage.setItem("openscad_files", JSON.stringify(files));
+    localFiles[trimmedName] = "";
+    localStorage.setItem("openscad_local_files", JSON.stringify(localFiles));
     localStorage.setItem("openscad_active_file", trimmedName);
     
     updateFileSelectOptions();
@@ -379,90 +375,100 @@ demoshape();
   // Rename File handler
   const renameFileBtn = document.getElementById('rename-file-btn');
   renameFileBtn.addEventListener('click', () => {
-    const activeFile = localStorage.getItem("openscad_active_file") || "Demo Shape";
-    const name = prompt("Enter new file name:", activeFile);
+    const activeFile = localStorage.getItem("openscad_active_file") || "/DemoShape.scad";
+    const name = prompt("Enter new file name/path:", activeFile);
     if (name === null) return;
     
-    const trimmedName = name.trim();
+    let trimmedName = name.trim();
     if (!trimmedName) {
       alert("File name cannot be empty.");
       return;
+    }
+    
+    if (!trimmedName.startsWith('/')) {
+      trimmedName = '/' + trimmedName;
+    }
+    trimmedName = trimmedName.replace(/\\/g, '/');
+    if (!trimmedName.endsWith('.scad')) {
+      trimmedName += '.scad';
     }
     
     if (trimmedName === activeFile) {
       return;
     }
     
-    let files = JSON.parse(localStorage.getItem("openscad_files") || "{}");
-    if (files[trimmedName] !== undefined) {
+    const localFiles = JSON.parse(localStorage.getItem("openscad_local_files") || "{}");
+    const mergedFiles = { ...zipFiles, ...localFiles };
+    
+    if (mergedFiles[trimmedName] !== undefined) {
       alert("A file with this name already exists.");
       return;
     }
     
     const currentCode = editor.getValue();
     
-    if (activeFile === "Demo Shape") {
-      // Create new file with current code
-      files[trimmedName] = currentCode;
-      // Recreate Demo Shape with initial default value
-      files["Demo Shape"] = initialCode;
-      
-      localStorage.setItem("openscad_files", JSON.stringify(files));
-      localStorage.setItem("openscad_active_file", trimmedName);
-      
-      updateFileSelectOptions();
-      
-      appendLog(`Renamed default "Demo Shape" to "${trimmedName}" and recreated original "Demo Shape" template`, 'info');
-    } else {
-      // Regular rename: copy content and delete old entry
-      files[trimmedName] = currentCode;
-      delete files[activeFile];
-      
-      localStorage.setItem("openscad_files", JSON.stringify(files));
-      localStorage.setItem("openscad_active_file", trimmedName);
-      
-      updateFileSelectOptions();
-      
-      appendLog(`Renamed "${activeFile}" to "${trimmedName}"`, 'info');
+    localFiles[trimmedName] = currentCode;
+    
+    if (localFiles[activeFile] !== undefined) {
+      delete localFiles[activeFile];
     }
+    
+    localStorage.setItem("openscad_local_files", JSON.stringify(localFiles));
+    localStorage.setItem("openscad_active_file", trimmedName);
+    
+    updateFileSelectOptions();
+    
+    appendLog(`Renamed "${activeFile}" to "${trimmedName}"`, 'info');
   });
 
   // Delete File handler
   const deleteFileBtn = document.getElementById('delete-file-btn');
   deleteFileBtn.addEventListener('click', () => {
-    const activeFile = localStorage.getItem("openscad_active_file") || "Demo Shape";
-    if (activeFile === "Demo Shape") {
-      if (!confirm(`Are you sure you want to restore "Demo Shape" to its original template?`)) return;
+    const activeFile = localStorage.getItem("openscad_active_file") || "/DemoShape.scad";
+    let localFiles = JSON.parse(localStorage.getItem("openscad_local_files") || "{}");
+    
+    const existsInZip = zipFiles[activeFile] !== undefined;
+    
+    if (existsInZip) {
+      if (!confirm(`Are you sure you want to revert "${activeFile}" to its original template from libs.zip?`)) return;
       
-      let files = JSON.parse(localStorage.getItem("openscad_files") || "{}");
-      files["Demo Shape"] = initialCode;
-      localStorage.setItem("openscad_files", JSON.stringify(files));
+      if (localFiles[activeFile] !== undefined) {
+        delete localFiles[activeFile];
+        localStorage.setItem("openscad_local_files", JSON.stringify(localFiles));
+      }
       
       isSwitchingFile = true;
-      editor.setValue(initialCode);
+      editor.setValue(zipFiles[activeFile]);
       isSwitchingFile = false;
       
-      appendLog(`Restored "Demo Shape" to original template`, 'info');
+      appendLog(`Reverted "${activeFile}" to original template`, 'info');
       renderModel();
-      return;
+    } else {
+      if (!confirm(`Are you sure you want to delete "${activeFile}"?`)) return;
+      
+      if (localFiles[activeFile] !== undefined) {
+        delete localFiles[activeFile];
+        localStorage.setItem("openscad_local_files", JSON.stringify(localFiles));
+      }
+      
+      let fallbackFile = "/DemoShape.scad";
+      const mergedFiles = { ...zipFiles, ...localFiles };
+      if (mergedFiles[fallbackFile] === undefined) {
+        const keys = Object.keys(mergedFiles);
+        fallbackFile = keys.length > 0 ? keys[0] : "/untitled.scad";
+      }
+      
+      localStorage.setItem("openscad_active_file", fallbackFile);
+      
+      updateFileSelectOptions();
+      
+      isSwitchingFile = true;
+      editor.setValue(mergedFiles[fallbackFile] || "");
+      isSwitchingFile = false;
+      
+      appendLog(`Deleted "${activeFile}"`, 'info');
+      renderModel();
     }
-    
-    if (!confirm(`Are you sure you want to delete "${activeFile}"?`)) return;
-    
-    let files = JSON.parse(localStorage.getItem("openscad_files") || "{}");
-    delete files[activeFile];
-    
-    localStorage.setItem("openscad_files", JSON.stringify(files));
-    localStorage.setItem("openscad_active_file", "Demo Shape");
-    
-    updateFileSelectOptions();
-    
-    isSwitchingFile = true;
-    editor.setValue(files["Demo Shape"] || initialCode);
-    isSwitchingFile = false;
-    
-    appendLog(`Deleted "${activeFile}"`, 'info');
-    renderModel();
   });
 
   // Debounced editor change listener (Auto-Save & Auto-Render)
@@ -480,6 +486,53 @@ demoshape();
       }
     }, 1000);
   });
+
+  async function initApp() {
+    statusDot.className = 'status-indicator busy';
+    statusText.textContent = 'Loading libraries...';
+    await loadLibsZip();
+
+    let localFiles = JSON.parse(localStorage.getItem("openscad_local_files") || "null");
+    if (localFiles === null) {
+      localFiles = {};
+      const oldFiles = JSON.parse(localStorage.getItem("openscad_files") || "{}");
+      for (let [name, content] of Object.entries(oldFiles)) {
+        if (name === "Demo Shape") continue;
+        let path = name;
+        if (!path.endsWith('.scad')) {
+          path = path + '.scad';
+        }
+        if (!path.startsWith('/')) {
+          path = '/' + path;
+        }
+        localFiles[path] = content;
+      }
+      localStorage.setItem("openscad_local_files", JSON.stringify(localFiles));
+      localStorage.removeItem("openscad_files");
+    }
+
+    let activeFile = localStorage.getItem("openscad_active_file");
+    const mergedFiles = { ...zipFiles, ...localFiles };
+    if (!activeFile || !mergedFiles[activeFile]) {
+      if (mergedFiles["/DemoShape.scad"] !== undefined) {
+        activeFile = "/DemoShape.scad";
+      } else {
+        const keys = Object.keys(mergedFiles);
+        activeFile = keys.length > 0 ? keys[0] : "/untitled.scad";
+      }
+      localStorage.setItem("openscad_active_file", activeFile);
+    }
+
+    updateFileSelectOptions();
+
+    isSwitchingFile = true;
+    editor.setValue(mergedFiles[activeFile] || "");
+    isSwitchingFile = false;
+
+    statusDot.className = 'status-indicator';
+    statusText.textContent = 'Ready';
+    renderModel();
+  }
 
   // --- ThreeJS 3D Viewport Setup ---
   let scene, camera, renderer, controls, currentMesh, gridHelper, axesHelper;
@@ -961,7 +1014,20 @@ demoshape();
 
     const code = editor.getValue();
     currentCompilingCode = code;
-    activeWorker.postMessage({ type: 'compile', code: code, format: '3mf' });
+    
+    const activeFile = localStorage.getItem("openscad_active_file") || "/DemoShape.scad";
+    const localFiles = JSON.parse(localStorage.getItem("openscad_local_files") || "{}");
+    const mergedFiles = { ...zipFiles, ...localFiles };
+    
+    // Ensure the current edited code is what's compiled
+    mergedFiles[activeFile] = code;
+    
+    activeWorker.postMessage({ 
+      type: 'compile', 
+      activeFilePath: activeFile, 
+      files: mergedFiles, 
+      format: '3mf' 
+    });
   }
 
   renderBtn.addEventListener('click', renderModel);
@@ -1041,7 +1107,19 @@ demoshape();
       statusText.textContent = 'Ready';
     };
 
-    activeWorker.postMessage({ type: 'compile', code: currentCompilingCode, format: 'stl' });
+    const activeFile = localStorage.getItem("openscad_active_file") || "/DemoShape.scad";
+    const localFiles = JSON.parse(localStorage.getItem("openscad_local_files") || "{}");
+    const mergedFiles = { ...zipFiles, ...localFiles };
+    
+    // Ensure the current active file has the latest code
+    mergedFiles[activeFile] = currentCompilingCode;
+
+    activeWorker.postMessage({ 
+      type: 'compile', 
+      activeFilePath: activeFile, 
+      files: mergedFiles, 
+      format: 'stl' 
+    });
   });
 
   // --- Download 3MF Click Handler ---
@@ -1056,5 +1134,5 @@ demoshape();
   appendLog('Click "Render" to compile and view your model.', 'info');
 
   // Trigger initial render
-  renderModel();
+  initApp();
 });

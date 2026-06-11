@@ -2,6 +2,26 @@ import OpenSCAD from "./openscad.js";
 import { addFonts } from "./openscad.fonts.js";
 import { addMCAD } from "./openscad.mcad.js";
 
+function ensureDirectoryExists(fs, filePath) {
+  const dirIndex = filePath.lastIndexOf("/");
+  if (dirIndex != -1) {
+    const dirname = filePath.substring(0, dirIndex);
+    ensureDirectoryExists(fs, dirname);
+    if (dirname != "" && !exists(fs, dirname)) {
+      fs.mkdir(dirname);
+    }
+  }
+}
+
+function exists(fs, path) {
+  try {
+    fs.stat(path);
+    return true;
+  } catch (e) {
+    return false;
+  }
+}
+
 function safeDump(obj, depth = 3) {
   const seen = new WeakSet();
   
@@ -64,7 +84,7 @@ function safeDump(obj, depth = 3) {
 
 self.onmessage = async function(e) {
   if (e.data.type === 'compile') {
-    const { code, format } = e.data;
+    const { activeFilePath, files, format } = e.data;
     const outFormat = format || '3mf';
     const filename = `output.${outFormat}`;
     
@@ -91,12 +111,16 @@ self.onmessage = async function(e) {
       // Create locale directory to avoid localization warning
       instance.FS.mkdir("/locale");
       
-      instance.FS.writeFile("/input.scad", code);
+      // Populate the virtual filesystem with the project files
+      for (const [filePath, fileContent] of Object.entries(files)) {
+        ensureDirectoryExists(instance.FS, filePath);
+        instance.FS.writeFile(filePath, fileContent);
+      }
 
       self.postMessage({ type: 'log', text: `Compiling model to ${outFormat.toUpperCase()}...`, logType: 'info' });
 
       // Execute compilation
-      instance.callMain(["/input.scad", "--backend=Manifold", "-o", filename]);
+      instance.callMain([activeFilePath, "--backend=Manifold", "-o", filename]);
       const output = instance.FS.readFile("/" + filename);
       
       // Post success and transfer the array buffer to avoid copying overhead
