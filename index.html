@@ -77,7 +77,15 @@
         <header class="panel-header">
           <span class="panel-title">Editor</span>
           <div class="file-controls">
-            <select id="file-select" class="style-select"></select>
+            <div id="file-select-container" class="custom-select-container">
+              <button id="file-select-trigger" class="custom-select-trigger">
+                <span id="active-file-text">/DemoShape</span>
+                <span class="chevron-arrow">▼</span>
+              </button>
+              <div id="file-select-popup" class="custom-select-popup hidden">
+                <div id="file-tree" class="file-tree"></div>
+              </div>
+            </div>
             <button id="new-file-btn" class="terminal-btn">New</button>
             <button id="rename-file-btn" class="terminal-btn">Rename</button>
             <button id="delete-file-btn" class="terminal-btn">Delete</button>

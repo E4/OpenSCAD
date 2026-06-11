@@ -279,66 +279,203 @@ require(['vs/editor/editor.main'], async function () {
     localStorage.setItem("openscad_local_files", JSON.stringify(localFiles));
   }
 
-  function updateFileSelectOptions() {
-    const fileSelect = document.getElementById('file-select');
-    fileSelect.innerHTML = '';
-    const localFiles = JSON.parse(localStorage.getItem("openscad_local_files") || "{}");
+  const expandedPaths = new Set();
+
+  function buildFileTree(files) {
+    const root = { name: "", path: "", isFolder: true, children: {} };
     
-    const allPaths = new Set([
-      ...Object.keys(zipFiles),
-      ...Object.keys(localFiles)
-    ]);
-    
-    const sortedPaths = Array.from(allPaths).sort();
-    const activeFile = localStorage.getItem("openscad_active_file") || "/DemoShape.scad";
-    
-    sortedPaths.forEach(path => {
-      const option = document.createElement('option');
-      option.value = path;
-      option.textContent = path.replace(/\.scad$/, '');
-      if (path === activeFile) {
-        option.selected = true;
+    for (const filePath of Object.keys(files)) {
+      const parts = filePath.split('/').filter(p => p !== "");
+      let current = root;
+      let accumulatedPath = "";
+      
+      for (let i = 0; i < parts.length; i++) {
+        const part = parts[i];
+        accumulatedPath += '/' + part;
+        const isLast = (i === parts.length - 1);
+        
+        if (isLast) {
+          current.children[part] = {
+            name: part,
+            path: filePath,
+            isFolder: false
+          };
+        } else {
+          if (!current.children[part]) {
+            current.children[part] = {
+              name: part,
+              path: accumulatedPath,
+              isFolder: true,
+              children: {}
+            };
+          }
+          current = current.children[part];
+        }
       }
-      fileSelect.appendChild(option);
-    });
+    }
+    return root;
   }
 
-  // File selection dropdown handler
-  document.getElementById('file-select').addEventListener('change', (e) => {
-    saveCurrentFile();
+  function renderFileTree() {
+    const fileTreeContainer = document.getElementById('file-tree');
+    if (!fileTreeContainer) return;
+    fileTreeContainer.innerHTML = '';
     
-    const newActiveFile = e.target.value;
-    localStorage.setItem("openscad_active_file", newActiveFile);
+    const localFiles = JSON.parse(localStorage.getItem("openscad_local_files") || "{}");
+    const mergedFiles = { ...zipFiles, ...localFiles };
+    
+    const treeData = buildFileTree(mergedFiles);
+    const activeFile = localStorage.getItem("openscad_active_file") || "/DemoShape.scad";
+    
+    const activeTextSpan = document.getElementById('active-file-text');
+    if (activeTextSpan) {
+      activeTextSpan.textContent = activeFile.replace(/\.scad$/, '');
+    }
+    
+    function renderNode(node, container) {
+      const sortedKeys = Object.keys(node.children).sort((a, b) => {
+        const itemA = node.children[a];
+        const itemB = node.children[b];
+        if (itemA.isFolder !== itemB.isFolder) {
+          return itemA.isFolder ? -1 : 1;
+        }
+        return a.localeCompare(b);
+      });
+      
+      sortedKeys.forEach(key => {
+        const child = node.children[key];
+        
+        if (child.isFolder) {
+          const folderDiv = document.createElement('div');
+          folderDiv.className = 'tree-folder';
+          
+          const header = document.createElement('div');
+          header.className = 'tree-folder-header';
+          header.dataset.path = child.path;
+          
+          const isExpanded = expandedPaths.has(child.path);
+          
+          const toggle = document.createElement('span');
+          toggle.className = 'tree-folder-toggle';
+          toggle.textContent = isExpanded ? '▾' : '▸';
+          
+          const icon = document.createElement('span');
+          icon.className = 'tree-folder-icon';
+          icon.textContent = '📁';
+          
+          const nameSpan = document.createElement('span');
+          nameSpan.className = 'tree-folder-name';
+          nameSpan.textContent = child.name;
+          
+          header.appendChild(toggle);
+          header.appendChild(icon);
+          header.appendChild(nameSpan);
+          folderDiv.appendChild(header);
+          
+          const childrenDiv = document.createElement('div');
+          childrenDiv.className = 'tree-folder-children';
+          if (!isExpanded) {
+            childrenDiv.classList.add('collapsed');
+          }
+          
+          renderNode(child, childrenDiv);
+          folderDiv.appendChild(childrenDiv);
+          container.appendChild(folderDiv);
+          
+          header.addEventListener('click', (e) => {
+            e.stopPropagation();
+            if (expandedPaths.has(child.path)) {
+              expandedPaths.delete(child.path);
+            } else {
+              expandedPaths.add(child.path);
+            }
+            renderFileTree();
+          });
+        } else {
+          const fileDiv = document.createElement('div');
+          fileDiv.className = 'tree-file';
+          if (child.path === activeFile) {
+            fileDiv.classList.add('active');
+          }
+          fileDiv.dataset.path = child.path;
+          
+          const icon = document.createElement('span');
+          icon.className = 'tree-file-icon';
+          icon.textContent = '📄';
+          
+          const nameSpan = document.createElement('span');
+          nameSpan.className = 'tree-file-name';
+          nameSpan.textContent = child.name.replace(/\.scad$/, '');
+          
+          fileDiv.appendChild(icon);
+          fileDiv.appendChild(nameSpan);
+          container.appendChild(fileDiv);
+          
+          fileDiv.addEventListener('click', (e) => {
+            e.stopPropagation();
+            selectFile(child.path);
+          });
+        }
+      });
+    }
+    
+    renderNode(treeData, fileTreeContainer);
+  }
+
+  function selectFile(filePath) {
+    saveCurrentFile();
+    localStorage.setItem("openscad_active_file", filePath);
     
     const localFiles = JSON.parse(localStorage.getItem("openscad_local_files") || "{}");
     const mergedFiles = { ...zipFiles, ...localFiles };
     
     isSwitchingFile = true;
-    editor.setValue(mergedFiles[newActiveFile] || "");
+    editor.setValue(mergedFiles[filePath] || "");
     isSwitchingFile = false;
     
-    // Trigger render when switching files
+    renderFileTree();
+    const popup = document.getElementById('file-select-popup');
+    if (popup) popup.classList.add('hidden');
+    
     renderModel();
-  });
+  }
+
+  // Toggle Custom Dropdown Popup
+  const popupTrigger = document.getElementById('file-select-trigger');
+  const popupOverlay = document.getElementById('file-select-popup');
+  
+  if (popupTrigger && popupOverlay) {
+    popupTrigger.addEventListener('click', (e) => {
+      e.stopPropagation();
+      popupOverlay.classList.toggle('hidden');
+    });
+    
+    document.addEventListener('click', (e) => {
+      const container = document.getElementById('file-select-container');
+      if (container && !container.contains(e.target)) {
+        popupOverlay.classList.add('hidden');
+      }
+    });
+  }
 
   // New File handler
   const newFileBtn = document.getElementById('new-file-btn');
   newFileBtn.addEventListener('click', () => {
     saveCurrentFile();
 
-    let defaultName = "/Custom/untitled.scad";
+    let defaultName = "untitled";
     const localFiles = JSON.parse(localStorage.getItem("openscad_local_files") || "{}");
     const mergedFiles = { ...zipFiles, ...localFiles };
     
-    if (mergedFiles[defaultName] !== undefined) {
+    if (mergedFiles["/untitled.scad"] !== undefined) {
       let counter = 1;
-      while (mergedFiles[`/Custom/untitled${counter}.scad`] !== undefined) {
+      while (mergedFiles[`/untitled${counter}.scad`] !== undefined) {
         counter++;
       }
-      defaultName = `/Custom/untitled${counter}.scad`;
+      defaultName = "untitled" + counter;
     }
     
-    const name = prompt("Enter file name (e.g. /Custom/my_design.scad):", defaultName);
+    const name = prompt("Enter file name:", defaultName);
     if (name === null) return;
     let trimmedName = name.trim();
     if (!trimmedName) {
@@ -363,7 +500,15 @@ require(['vs/editor/editor.main'], async function () {
     localStorage.setItem("openscad_local_files", JSON.stringify(localFiles));
     localStorage.setItem("openscad_active_file", trimmedName);
     
-    updateFileSelectOptions();
+    // Auto-expand folders leading to the new file
+    const parts = trimmedName.split('/').filter(p => p !== "");
+    let currentPath = "";
+    for (let i = 0; i < parts.length - 1; i++) {
+      currentPath += '/' + parts[i];
+      expandedPaths.add(currentPath);
+    }
+
+    renderFileTree();
     
     isSwitchingFile = true;
     editor.setValue("");
@@ -416,7 +561,15 @@ require(['vs/editor/editor.main'], async function () {
     localStorage.setItem("openscad_local_files", JSON.stringify(localFiles));
     localStorage.setItem("openscad_active_file", trimmedName);
     
-    updateFileSelectOptions();
+    // Auto-expand folders leading to the renamed file
+    const parts = trimmedName.split('/').filter(p => p !== "");
+    let currentPath = "";
+    for (let i = 0; i < parts.length - 1; i++) {
+      currentPath += '/' + parts[i];
+      expandedPaths.add(currentPath);
+    }
+
+    renderFileTree();
     
     appendLog(`Renamed "${activeFile}" to "${trimmedName}"`, 'info');
   });
@@ -430,7 +583,7 @@ require(['vs/editor/editor.main'], async function () {
     const existsInZip = zipFiles[activeFile] !== undefined;
     
     if (existsInZip) {
-      if (!confirm(`Are you sure you want to revert "${activeFile}" to its original template from libs.zip?`)) return;
+      if (!confirm(`Are you sure you want to revert "${activeFile}" to its original version?`)) return;
       
       if (localFiles[activeFile] !== undefined) {
         delete localFiles[activeFile];
@@ -441,7 +594,7 @@ require(['vs/editor/editor.main'], async function () {
       editor.setValue(zipFiles[activeFile]);
       isSwitchingFile = false;
       
-      appendLog(`Reverted "${activeFile}" to original template`, 'info');
+      appendLog(`Reverted "${activeFile}" to original version`, 'info');
       renderModel();
     } else {
       if (!confirm(`Are you sure you want to delete "${activeFile}"?`)) return;
@@ -460,7 +613,7 @@ require(['vs/editor/editor.main'], async function () {
       
       localStorage.setItem("openscad_active_file", fallbackFile);
       
-      updateFileSelectOptions();
+      renderFileTree();
       
       isSwitchingFile = true;
       editor.setValue(mergedFiles[fallbackFile] || "");
@@ -523,7 +676,17 @@ require(['vs/editor/editor.main'], async function () {
       localStorage.setItem("openscad_active_file", activeFile);
     }
 
-    updateFileSelectOptions();
+    // Auto-expand folders leading to the active file on launch
+    if (activeFile) {
+      const parts = activeFile.split('/').filter(p => p !== "");
+      let currentPath = "";
+      for (let i = 0; i < parts.length - 1; i++) {
+        currentPath += '/' + parts[i];
+        expandedPaths.add(currentPath);
+      }
+    }
+
+    renderFileTree();
 
     isSwitchingFile = true;
     editor.setValue(mergedFiles[activeFile] || "");
