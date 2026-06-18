@@ -710,9 +710,11 @@ require(['vs/editor/editor.main'], async function () {
     scene = new THREE.Scene();
     scene.background = new THREE.Color(0x12141c);
 
-    // Camera
+    // Camera (Z-up orientation)
+    THREE.Object3D.DEFAULT_UP.set(0, 0, 1);
     camera = new THREE.PerspectiveCamera(45, width / height, 0.1, 1000);
-    camera.position.set(40, 40, 60);
+    camera.up.set(0, 0, 1);
+    camera.position.set(40, -60, 40);
 
     // Renderer
     renderer = new THREE.WebGLRenderer({ antialias: true });
@@ -741,15 +743,16 @@ require(['vs/editor/editor.main'], async function () {
     pointLight.position.set(0, 30, 20);
     scene.add(pointLight);
 
-    // Grid Helper
+    // Grid Helper (Rotated to XY plane for Z-up)
     gridHelper = new THREE.GridHelper(100, 30, 0x00f0ff, 0x222633);
-    gridHelper.position.y = -0.01;
+    gridHelper.rotation.x = Math.PI / 2;
+    gridHelper.position.z = -0.01;
     gridHelper.visible = gridToggle.checked;
     scene.add(gridHelper);
 
     // Axes Helper
     axesHelper = new THREE.AxesHelper(15);
-    axesHelper.position.y = 0.01; // Slightly offset to avoid z-fighting
+    axesHelper.position.z = 0.01; // Slightly offset to avoid z-fighting
     axesHelper.visible = gridToggle.checked;
     scene.add(axesHelper);
 
@@ -791,7 +794,8 @@ require(['vs/editor/editor.main'], async function () {
 
     // Orthographic Camera for alignment
     gizmoCamera = new THREE.OrthographicCamera(-2, 2, 2, -2, 0.1, 100);
-    gizmoCamera.position.set(0, 0, 10);
+    gizmoCamera.up.set(0, 0, 1);
+    gizmoCamera.position.set(0, -10, 0);
 
     // Renderer (alpha: true for transparent background)
     gizmoRenderer = new THREE.WebGLRenderer({ alpha: true, antialias: true });
@@ -963,7 +967,7 @@ require(['vs/editor/editor.main'], async function () {
       let cameraZ = Math.abs(maxDim / 2 / Math.tan(fov / 2));
       
       cameraZ *= 1.7; // Factor to add spacing around the model
-      camera.position.set(cameraZ * 0.7, cameraZ * 0.7, cameraZ);
+      camera.position.set(cameraZ * 0.7, -cameraZ, cameraZ * 0.7);
       camera.lookAt(new THREE.Vector3(0, 0, 0));
       controls.target.set(0, 0, 0);
       controls.update();
