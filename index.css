@@ -154,7 +154,7 @@ body {
   align-items: stretch;
 }
 
-.render-btn, .download-btn {
+.render-btn, .stop-btn, .download-btn {
   font-family: inherit;
   font-size: 0.9rem;
   font-weight: 600;
@@ -178,11 +178,18 @@ body {
   border-color: rgba(255, 255, 255, 0.2);
 }
 
-.render-btn:active, .download-btn:active:not(:disabled) {
+.stop-btn:hover:not(:disabled) {
+  transform: translateY(-1px);
+  background: rgba(255, 23, 68, 0.15);
+  border-color: rgba(255, 23, 68, 0.4);
+  color: var(--error-color);
+}
+
+.render-btn:active, .stop-btn:active, .download-btn:active:not(:disabled) {
   transform: translateY(0);
 }
 
-.render-btn:disabled, .download-btn:disabled {
+.render-btn:disabled, .stop-btn:disabled, .download-btn:disabled {
   background: rgba(255, 255, 255, 0.02);
   color: var(--text-muted);
   border: 1px solid var(--panel-border);
@@ -708,6 +715,7 @@ body {
   }
 
   .workspace-container .render-btn,
+  .workspace-container .stop-btn,
   .workspace-container .download-btn {
     padding: 2px 6px;
     height: 28px;
@@ -719,13 +727,16 @@ body {
   }
 
   .workspace-container .render-btn:hover:not(:disabled),
+  .workspace-container .stop-btn:hover:not(:disabled),
   .workspace-container .download-btn:hover:not(:disabled),
   .workspace-container .render-btn:active,
+  .workspace-container .stop-btn:active,
   .workspace-container .download-btn:active:not(:disabled) {
     transform: none;
   }
 
   .workspace-container .render-btn svg,
+  .workspace-container .stop-btn svg,
   .workspace-container .download-btn svg {
     width: 12px;
     height: 12px;

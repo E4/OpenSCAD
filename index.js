@@ -171,6 +171,7 @@ require(['vs/editor/editor.main'], async function () {
 
   // Initialize UI & ThreeJS variables
   const renderBtn = document.getElementById('render-btn');
+  const stopBtn = document.getElementById('stop-btn');
   const downloadBtn = document.getElementById('download-btn');
   const download3mfBtn = document.getElementById('download-3mf-btn');
   const statusDot = document.getElementById('status-dot');
@@ -1116,6 +1117,8 @@ require(['vs/editor/editor.main'], async function () {
     }
 
     renderBtn.disabled = true;
+    renderBtn.style.display = 'none';
+    stopBtn.style.display = '';
     downloadBtn.disabled = true;
     download3mfBtn.disabled = true;
     statusDot.className = 'status-indicator busy';
@@ -1143,6 +1146,8 @@ require(['vs/editor/editor.main'], async function () {
         activeWorker = null;
 
         renderBtn.disabled = false;
+        renderBtn.style.display = '';
+        stopBtn.style.display = 'none';
         downloadBtn.disabled = false;
         download3mfBtn.disabled = false;
         statusDot.className = 'status-indicator';
@@ -1158,6 +1163,8 @@ require(['vs/editor/editor.main'], async function () {
         activeWorker = null;
 
         renderBtn.disabled = false;
+        renderBtn.style.display = '';
+        stopBtn.style.display = 'none';
         downloadBtn.disabled = false;
         download3mfBtn.disabled = false;
         statusDot.className = 'status-indicator';
@@ -1173,6 +1180,8 @@ require(['vs/editor/editor.main'], async function () {
       activeWorker = null;
 
       renderBtn.disabled = false;
+      renderBtn.style.display = '';
+      stopBtn.style.display = 'none';
       downloadBtn.disabled = false;
       download3mfBtn.disabled = false;
       statusDot.className = 'status-indicator';
@@ -1198,6 +1207,21 @@ require(['vs/editor/editor.main'], async function () {
   }
 
   renderBtn.addEventListener('click', renderModel);
+
+  stopBtn.addEventListener('click', () => {
+    if (activeWorker) {
+      activeWorker.terminate();
+      activeWorker = null;
+      appendLog('Rendering stopped by user.', 'info');
+    }
+    renderBtn.disabled = false;
+    renderBtn.style.display = '';
+    stopBtn.style.display = 'none';
+    downloadBtn.disabled = false;
+    download3mfBtn.disabled = false;
+    statusDot.className = 'status-indicator';
+    statusText.textContent = 'Ready';
+  });
 
   // Helper function to trigger browser file download
   function triggerDownload(buffer, filename) {
