@@ -1252,6 +1252,8 @@ require(['vs/editor/editor.main'], async function () {
     }
 
     renderBtn.disabled = true;
+    renderBtn.style.display = 'none';
+    stopBtn.style.display = '';
     downloadBtn.disabled = true;
     download3mfBtn.disabled = true;
     statusDot.className = 'status-indicator busy';
@@ -1270,6 +1272,8 @@ require(['vs/editor/editor.main'], async function () {
         activeWorker = null;
 
         renderBtn.disabled = false;
+        renderBtn.style.display = '';
+        stopBtn.style.display = 'none';
         downloadBtn.disabled = false;
         download3mfBtn.disabled = false;
         statusDot.className = 'status-indicator';
@@ -1279,6 +1283,8 @@ require(['vs/editor/editor.main'], async function () {
         activeWorker.terminate();
         activeWorker = null;
         renderBtn.disabled = false;
+        renderBtn.style.display = '';
+        stopBtn.style.display = 'none';
         downloadBtn.disabled = false;
         download3mfBtn.disabled = false;
         statusDot.className = 'status-indicator';
@@ -1292,6 +1298,8 @@ require(['vs/editor/editor.main'], async function () {
       activeWorker.terminate();
       activeWorker = null;
       renderBtn.disabled = false;
+      renderBtn.style.display = '';
+      stopBtn.style.display = 'none';
       downloadBtn.disabled = false;
       download3mfBtn.disabled = false;
       statusDot.className = 'status-indicator';
